@@ -1,0 +1,26 @@
+{
+  "name": "moment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MOMENT monorepo workspace",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "test": "npm run test --workspace backend && npm run lint --workspace frontend"
+  },
+  "keywords": [
+    "moment",
+    "nextjs",
+    "express",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
