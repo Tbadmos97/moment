@@ -1,8 +1,12 @@
 import type { Request } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 const normalizeUserKey = (req: Request): string => {
-  return req.user?.id ?? req.ip ?? req.socket.remoteAddress ?? 'anonymous';
+  if (req.user?.id) {
+    return req.user.id;
+  }
+
+  return ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? 'anonymous');
 };
 
 export const authLimiter = rateLimit({
