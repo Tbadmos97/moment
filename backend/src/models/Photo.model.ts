@@ -1,0 +1,153 @@
+import { Schema, Types, model, type InferSchemaType } from 'mongoose';
+
+const photoSchema = new Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    caption: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: '',
+    },
+    location: {
+      name: {
+        type: String,
+        trim: true,
+        default: undefined,
+      },
+      coordinates: {
+        type: [Number],
+        validate: {
+          validator: (value?: number[]) => !value || value.length === 2,
+          message: 'Coordinates must include [longitude, latitude].',
+        },
+        default: undefined,
+      },
+    },
+    people: {
+      type: [
+        {
+          type: String,
+          trim: true,
+          maxlength: 40,
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (value: string[]) => value.length <= 10,
+        message: 'People supports up to 10 names.',
+      },
+    },
+    tags: {
+      type: [
+        {
+          type: String,
+          lowercase: true,
+          trim: true,
+          maxlength: 30,
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (value: string[]) => value.length <= 10,
+        message: 'Tags supports up to 10 values.',
+      },
+    },
+    imageUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    thumbnailUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    imageKey: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    thumbnailKey: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    width: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    height: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    fileSize: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    creator: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    likes: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+      default: [],
+    },
+    likesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    commentsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    viewsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    isPublished: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+type PhotoSchema = InferSchemaType<typeof photoSchema>;
+
+export interface IPhoto extends PhotoSchema {
+  _id: Types.ObjectId;
+}
+
+photoSchema.index({ creator: 1 });
+photoSchema.index({ tags: 1 });
+photoSchema.index({ createdAt: -1 });
+photoSchema.index({ title: 'text', caption: 'text', tags: 'text' });
+
+const Photo = model<IPhoto>('Photo', photoSchema);
+
+export default Photo;

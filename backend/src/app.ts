@@ -1,10 +1,10 @@
 import compression from 'compression';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import { generalLimiter } from './middleware/rateLimit.middleware';
 import adminRoutes from './routes/admin.routes';
 import authRoutes from './routes/auth.routes';
 import commentsRoutes from './routes/comments.routes';
@@ -26,24 +26,13 @@ const frontendOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:3000')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many requests. Please try again later.',
-  },
-});
-
 app.use(helmet());
 app.use(cors({ origin: frontendOrigins, credentials: true }));
 app.use(compression());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(limiter);
+app.use(generalLimiter);
 
 app.get('/api/health', (_req, res) => {
   return res.status(200).json({
