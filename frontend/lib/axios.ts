@@ -6,6 +6,8 @@ import axios, {
 } from 'axios';
 import toast from 'react-hot-toast';
 
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth';
+
 type RetryableRequest = InternalAxiosRequestConfig & {
   _retry?: boolean;
 };
@@ -16,9 +18,6 @@ type QueueItem = {
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-const ACCESS_TOKEN_KEY = 'moment_access_token';
-const REFRESH_TOKEN_KEY = 'moment_refresh_token';
-
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -49,7 +48,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     return config;
   }
 
-  const token = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const token = getAccessToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -68,7 +67,7 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+      const refreshToken = getRefreshToken();
 
       if (!refreshToken) {
         return Promise.reject(error);
@@ -102,14 +101,16 @@ api.interceptors.response.use(
           throw new Error('Unable to refresh session. Please log in again.');
         }
 
-        window.localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+        setTokens({
+          accessToken: newAccessToken,
+          refreshToken,
+        });
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
         return api(originalRequest as AxiosRequestConfig);
       } catch (refreshError) {
-        window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-        window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+        clearTokens();
         processQueue(refreshError, null);
         toast.error('Session expired. Please sign in again.');
 
