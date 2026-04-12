@@ -33,9 +33,8 @@ export const registerUserValidation: ValidationChain[] = [
   body('password')
     .isLength({ min: 8, max: 128 })
     .withMessage('Password must be between 8 and 128 characters')
-    .matches(/^(?=.*[A-Za-z])(?=.*\d).+$/)
-    .withMessage('Password must contain at least one letter and one number'),
-  body('role').optional().isIn(['creator', 'consumer']).withMessage('Role must be creator or consumer'),
+    .matches(/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/)
+    .withMessage('Password must include one uppercase letter, one number, and one special character'),
   body('bio').optional().trim().isLength({ max: 160 }).withMessage('Bio must be at most 160 characters'),
   body('avatar').optional().isURL().withMessage('Avatar must be a valid URL'),
 ];
@@ -43,6 +42,14 @@ export const registerUserValidation: ValidationChain[] = [
 export const loginUserValidation: ValidationChain[] = [
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required'),
+];
+
+export const refreshTokenValidation: ValidationChain[] = [
+  body('refreshToken').trim().notEmpty().withMessage('refreshToken is required'),
+];
+
+export const logoutValidation: ValidationChain[] = [
+  body('refreshToken').trim().notEmpty().withMessage('refreshToken is required'),
 ];
 
 export const createPhotoValidation: ValidationChain[] = [

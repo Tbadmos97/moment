@@ -10,7 +10,7 @@ import {
 
 import type { UserRole } from '../types/auth.types';
 
-const USER_ROLES: UserRole[] = ['creator', 'consumer'];
+const USER_ROLES: UserRole[] = ['creator', 'consumer', 'admin'];
 
 const userSchema = new Schema(
   {
