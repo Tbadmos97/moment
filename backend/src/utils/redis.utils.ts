@@ -18,7 +18,7 @@ const redis = createRedisClient();
 
 export const CACHE_KEYS = {
   PHOTOS_LIST: 'photos:list',
-  PHOTO_DETAIL: 'photo:detail',
+  PHOTO_DETAIL: 'photos:detail',
   USER_PROFILE: 'user:profile',
 } as const;
 

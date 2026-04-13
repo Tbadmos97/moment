@@ -1,12 +1,29 @@
 import { Router } from 'express';
 
-import { deletePhoto, updatePhoto, uploadPhoto } from '../controllers/photo.controller';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import {
+  deletePhoto,
+  getPhotoById,
+  getPhotos,
+  getPhotosByCreator,
+  getTrendingTags,
+  likePhoto,
+  unlikePhoto,
+  updatePhoto,
+  uploadPhoto,
+} from '../controllers/photo.controller';
+import { authenticate, optionalAuth, requireRole } from '../middleware/auth.middleware';
 import { uploadLimiter } from '../middleware/rateLimit.middleware';
 import { uploadSingle } from '../middleware/upload.middleware';
 import { createPhotoValidation, updatePhotoValidation, validateRequest } from '../middleware/validate.middleware';
 
 const router = Router();
+
+router.get('/', optionalAuth, getPhotos);
+router.get('/trending-tags', getTrendingTags);
+router.get('/creator/:userId', getPhotosByCreator);
+router.get('/:id', optionalAuth, getPhotoById);
+router.post('/:id/like', authenticate, likePhoto);
+router.delete('/:id/like', authenticate, unlikePhoto);
 
 router.post('/', authenticate, requireRole('creator'), uploadLimiter, uploadSingle, createPhotoValidation, validateRequest, uploadPhoto);
 router.patch('/:id', authenticate, requireRole('creator'), updatePhotoValidation, validateRequest, updatePhoto);
