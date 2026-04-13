@@ -1,27 +1,40 @@
 export interface User {
   _id: string;
   username: string;
-  email: string;
+  email?: string;
   role: 'creator' | 'consumer' | 'admin';
   avatar?: string;
   bio?: string;
   createdAt: string;
 }
 
+export interface TagSummary {
+  tag: string;
+  count: number;
+}
+
+export interface LocationData {
+  name?: string;
+  coordinates?: number[];
+}
+
 export interface Photo {
   _id: string;
   title: string;
   caption: string;
-  location?: string;
+  location?: LocationData;
   people?: string[];
   imageUrl: string;
   thumbnailUrl: string;
   creator: User;
-  likes: string[];
+  likes?: string[];
   likesCount: number;
   commentsCount: number;
+  viewsCount?: number;
   tags?: string[];
+  isLiked?: boolean;
   createdAt: string;
+  comments?: Comment[];
 }
 
 export interface Comment {
@@ -34,8 +47,10 @@ export interface Comment {
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
+  photos?: T[];
+  comments?: T[];
   page: number;
+  limit: number;
   totalPages: number;
   total: number;
   hasMore: boolean;

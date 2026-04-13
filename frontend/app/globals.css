@@ -77,3 +77,38 @@ h6 {
   background: linear-gradient(180deg, #e8c96a, #c9a84c);
   animation: confettiDrop 900ms ease-out forwards;
 }
+
+.masonry-grid {
+  display: flex;
+  margin-left: -16px;
+  width: auto;
+}
+
+.masonry-grid_column {
+  padding-left: 16px;
+  background-clip: padding-box;
+}
+
+.masonry-grid_column > article,
+.masonry-grid_column > div {
+  margin-bottom: 16px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #444 #111;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #111;
+}

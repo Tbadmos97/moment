@@ -36,7 +36,7 @@ export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX
     }
 
     if (!allowRoles.includes(user.role)) {
-      router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
+      router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/');
     }
   }, [allowRoles, isAuthenticated, isLoading, router, user]);
 
