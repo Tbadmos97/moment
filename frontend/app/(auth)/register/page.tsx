@@ -57,6 +57,8 @@ const calculatePasswordStrength = (password: string): StrengthLevel => {
 export default function RegisterPage(): JSX.Element {
   const router = useRouter();
   const registerUser = useAuthStore((state) => state.register);
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
@@ -118,17 +120,29 @@ export default function RegisterPage(): JSX.Element {
         email: values.email,
         password: values.password,
       });
-      toast.success('Account created successfully');
-      router.replace('/');
+      const role = useAuthStore.getState().user?.role;
+      toast.success(`Account created (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
     } catch {
       toast.error('Registration failed. Please try again.');
     }
   };
 
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !user) {
+      return;
+    }
+
+    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
+  }, [isAuthenticated, isLoading, router, user]);
+
   return (
     <motion.div layoutId="auth-content">
       <p className="text-2xl font-display text-text-primary">Create Account</p>
       <p className="mt-2 text-sm text-text-secondary">Join MOMENT and start sharing stories.</p>
+      <p className="mt-2 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-text-secondary">
+        Public signup creates a consumer account. Creator accounts are admin-created only.
+      </p>
 
       <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
         <div>

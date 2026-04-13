@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
@@ -24,6 +24,7 @@ export default function LoginPage(): JSX.Element {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
   const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -46,14 +47,22 @@ export default function LoginPage(): JSX.Element {
     try {
       await login({ email: values.email, password: values.password });
       const role = useAuthStore.getState().user?.role ?? user?.role;
-      toast.success('Welcome back');
-      router.replace(role === 'creator' ? '/creator' : '/');
+      toast.success(`Welcome back (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
     } catch {
       setShakeForm(true);
       window.setTimeout(() => setShakeForm(false), 420);
       toast.error('Wrong credentials. Please try again.');
     }
   };
+
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !user) {
+      return;
+    }
+
+    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
+  }, [isAuthenticated, isLoading, router, user]);
 
   return (
     <motion.div
@@ -63,6 +72,9 @@ export default function LoginPage(): JSX.Element {
     >
       <p className="text-2xl font-display text-text-primary">Sign In</p>
       <p className="mt-2 text-sm text-text-secondary">Step into your visual world.</p>
+      <p className="mt-2 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-text-secondary">
+        Role is detected automatically from your account: creators go to Creator Dashboard, consumers go to Discover.
+      </p>
 
       <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
         <div>
