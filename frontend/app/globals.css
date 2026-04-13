@@ -32,3 +32,48 @@ h6 {
 .text-balance {
   text-wrap: balance;
 }
+
+@keyframes borderShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.upload-dash-border::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: -2px;
+  border-radius: 1.5rem;
+  background: linear-gradient(120deg, rgba(201, 168, 76, 0.1), rgba(201, 168, 76, 0.65), rgba(255, 255, 255, 0.1));
+  background-size: 220% 220%;
+  animation: borderShift 5s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes confettiDrop {
+  0% {
+    transform: translateY(-16px) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(38px) rotate(220deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -4px;
+  width: 6px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e8c96a, #c9a84c);
+  animation: confettiDrop 900ms ease-out forwards;
+}
