@@ -1,16 +1,20 @@
 import { Redis } from '@upstash/redis';
 
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const createRedisClient = (): Redis | null => {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-if (!redisUrl || !redisToken) {
-  throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required');
-}
+  if (!redisUrl || !redisToken) {
+    return null;
+  }
 
-const redis = new Redis({
-  url: redisUrl,
-  token: redisToken,
-});
+  return new Redis({
+    url: redisUrl,
+    token: redisToken,
+  });
+};
+
+const redis = createRedisClient();
 
 export const CACHE_KEYS = {
   PHOTOS_LIST: 'photos:list',
@@ -22,6 +26,10 @@ export const CACHE_KEYS = {
  * Fetches cached JSON and returns a typed object.
  */
 export const getCache = async <T>(key: string): Promise<T | null> => {
+  if (!redis) {
+    return null;
+  }
+
   const value = await redis.get<string>(key);
 
   if (!value) {
@@ -40,6 +48,10 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
  * Persists a JSON value with TTL in seconds.
  */
 export const setCache = async (key: string, value: unknown, ttlSeconds: number): Promise<void> => {
+  if (!redis) {
+    return;
+  }
+
   await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
 };
 
@@ -47,6 +59,10 @@ export const setCache = async (key: string, value: unknown, ttlSeconds: number):
  * Deletes a single cache key.
  */
 export const deleteCache = async (key: string): Promise<void> => {
+  if (!redis) {
+    return;
+  }
+
   await redis.del(key);
 };
 
@@ -54,6 +70,10 @@ export const deleteCache = async (key: string): Promise<void> => {
  * Deletes keys matching a pattern using SCAN pagination.
  */
 export const deleteCachePattern = async (pattern: string): Promise<number> => {
+  if (!redis) {
+    return 0;
+  }
+
   let cursor = '0';
   let deleted = 0;
 
