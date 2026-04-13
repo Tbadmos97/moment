@@ -55,31 +55,101 @@ export const logoutValidation: ValidationChain[] = [
 export const createPhotoValidation: ValidationChain[] = [
   body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 100 }).withMessage('Title max length is 100'),
   body('caption').optional().trim().isLength({ max: 500 }).withMessage('Caption max length is 500'),
+  body('locationName').optional().trim().isLength({ max: 120 }).withMessage('Location name max length is 120'),
   body('location.name').optional().trim().isLength({ max: 120 }).withMessage('Location name max length is 120'),
   body('location.coordinates')
     .optional()
     .isArray({ min: 2, max: 2 })
     .withMessage('Coordinates must be an array [lng, lat] with 2 values'),
   body('location.coordinates.*').optional().isFloat().withMessage('Coordinates must be numbers'),
-  body('people').optional().isArray({ max: 10 }).withMessage('People supports up to 10 names'),
-  body('people.*').optional().trim().isLength({ min: 1, max: 40 }).withMessage('Each person name must be 1-40 characters'),
-  body('tags').optional().isArray({ max: 10 }).withMessage('Tags supports up to 10 values'),
-  body('tags.*').optional().trim().isLength({ min: 1, max: 30 }).withMessage('Each tag must be 1-30 characters'),
+  body('people')
+    .optional()
+    .custom((value) => {
+      if (Array.isArray(value)) {
+        return value.length <= 10;
+      }
+
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('[')) {
+          const parsed = JSON.parse(value) as string[];
+          return Array.isArray(parsed) && parsed.length <= 10;
+        }
+
+        return value.split(',').filter(Boolean).length <= 10;
+      }
+
+      return false;
+    })
+    .withMessage('People supports up to 10 names'),
+  body('tags')
+    .optional()
+    .custom((value) => {
+      if (Array.isArray(value)) {
+        return value.length <= 10;
+      }
+
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('[')) {
+          const parsed = JSON.parse(value) as string[];
+          return Array.isArray(parsed) && parsed.length <= 10;
+        }
+
+        return value.split(',').filter(Boolean).length <= 10;
+      }
+
+      return false;
+    })
+    .withMessage('Tags supports up to 10 values'),
 ];
 
 export const updatePhotoValidation: ValidationChain[] = [
   body('title').optional().trim().isLength({ min: 1, max: 100 }).withMessage('Title must be between 1 and 100 characters'),
   body('caption').optional().trim().isLength({ max: 500 }).withMessage('Caption max length is 500'),
+  body('locationName').optional().trim().isLength({ max: 120 }).withMessage('Location name max length is 120'),
   body('location.name').optional().trim().isLength({ max: 120 }).withMessage('Location name max length is 120'),
   body('location.coordinates')
     .optional()
     .isArray({ min: 2, max: 2 })
     .withMessage('Coordinates must be an array [lng, lat] with 2 values'),
   body('location.coordinates.*').optional().isFloat().withMessage('Coordinates must be numbers'),
-  body('people').optional().isArray({ max: 10 }).withMessage('People supports up to 10 names'),
-  body('people.*').optional().trim().isLength({ min: 1, max: 40 }).withMessage('Each person name must be 1-40 characters'),
-  body('tags').optional().isArray({ max: 10 }).withMessage('Tags supports up to 10 values'),
-  body('tags.*').optional().trim().isLength({ min: 1, max: 30 }).withMessage('Each tag must be 1-30 characters'),
+  body('people')
+    .optional()
+    .custom((value) => {
+      if (Array.isArray(value)) {
+        return value.length <= 10;
+      }
+
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('[')) {
+          const parsed = JSON.parse(value) as string[];
+          return Array.isArray(parsed) && parsed.length <= 10;
+        }
+
+        return value.split(',').filter(Boolean).length <= 10;
+      }
+
+      return false;
+    })
+    .withMessage('People supports up to 10 names'),
+  body('tags')
+    .optional()
+    .custom((value) => {
+      if (Array.isArray(value)) {
+        return value.length <= 10;
+      }
+
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('[')) {
+          const parsed = JSON.parse(value) as string[];
+          return Array.isArray(parsed) && parsed.length <= 10;
+        }
+
+        return value.split(',').filter(Boolean).length <= 10;
+      }
+
+      return false;
+    })
+    .withMessage('Tags supports up to 10 values'),
   body('isPublished').optional().isBoolean().withMessage('isPublished must be boolean'),
 ];
 

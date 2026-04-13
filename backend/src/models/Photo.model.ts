@@ -148,6 +148,31 @@ photoSchema.index({ tags: 1 });
 photoSchema.index({ createdAt: -1 });
 photoSchema.index({ title: 'text', caption: 'text', tags: 'text' });
 
+photoSchema.pre('deleteOne', { document: true, query: false }, async function cascadeRelatedRecords() {
+  const commentModel = this.$model('Comment');
+  const likeModel = this.$model('Like');
+
+  await Promise.all([
+    commentModel.deleteMany({ photo: this._id }),
+    likeModel.deleteMany({ photo: this._id }),
+  ]);
+});
+
+photoSchema.pre('findOneAndDelete', async function cascadeRelatedRecordsForQuery() {
+  const commentModel = this.model.db.model('Comment');
+  const likeModel = this.model.db.model('Like');
+  const doc = await this.model.findOne(this.getFilter()).select('_id').lean<{ _id: Types.ObjectId }>();
+
+  if (!doc) {
+    return;
+  }
+
+  await Promise.all([
+    commentModel.deleteMany({ photo: doc._id }),
+    likeModel.deleteMany({ photo: doc._id }),
+  ]);
+});
+
 const Photo = model<IPhoto>('Photo', photoSchema);
 
 export default Photo;
