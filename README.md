@@ -119,8 +119,3 @@ NEXT_PUBLIC_APP_NAME=MOMENT
 - `npm run build`: build backend and frontend
 - `npm run test`: run backend tests and frontend lint checks
 
-## Module 1 Delivery
-
-- Backend scaffold with strict TypeScript, middleware, rate limiting, routes, startup retry, graceful shutdown
-- Frontend scaffold with Next.js 14, Tailwind theme system, providers, API client interceptors, base UX shell
-- Root workspace scripts, environment templates, and documentation
