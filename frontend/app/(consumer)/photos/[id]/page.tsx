@@ -233,7 +233,7 @@ export default function PhotoDetailPage(): JSX.Element {
 
           <section>
             <p className="mb-3 text-xs uppercase tracking-[0.18em] text-text-muted">Comments</p>
-            <CommentSection photoId={id} initialComments={photo.comments ?? []} />
+            <CommentSection photoId={id} photoCreatorId={photo.creator._id} initialComments={photo.comments ?? []} />
           </section>
         </div>
       </aside>

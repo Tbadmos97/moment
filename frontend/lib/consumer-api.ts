@@ -27,6 +27,17 @@ export type CommentsPayload = {
   totalPages: number;
   total: number;
   hasMore: boolean;
+  averageRating: number;
+  totalRatings: number;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+  userHasRated: boolean;
+  userRating: number | null;
+};
+
+export type RatingPayload = {
+  averageRating: number;
+  totalRatings: number;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
 };
 
 export const fetchPhotos = async ({ pageParam = 1, limit = 20, sort = 'latest', tag, search }: FeedParams): Promise<PhotoFeedPayload> => {
@@ -69,7 +80,7 @@ export const unlikePhotoRequest = async (photoId: string): Promise<{ liked: bool
 };
 
 export const fetchComments = async (photoId: string, page = 1, limit = 20): Promise<CommentsPayload> => {
-  const response = await api.get(`/comments/photo/${photoId}`, {
+  const response = await api.get(`/photos/${photoId}/comments`, {
     params: {
       page,
       limit,
@@ -83,6 +94,15 @@ export const createCommentRequest = async (
   photoId: string,
   payload: { text: string; rating?: number },
 ): Promise<Comment> => {
-  const response = await api.post(`/comments/photo/${photoId}`, payload);
+  const response = await api.post(`/photos/${photoId}/comments`, payload);
   return response.data.data.comment as Comment;
+};
+
+export const deleteCommentRequest = async (commentId: string): Promise<void> => {
+  await api.delete(`/comments/${commentId}`);
+};
+
+export const fetchPhotoRating = async (photoId: string): Promise<RatingPayload> => {
+  const response = await api.get(`/photos/${photoId}/rating`);
+  return response.data.data as RatingPayload;
 };
