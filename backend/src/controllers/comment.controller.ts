@@ -1,13 +1,18 @@
 import type { Request, Response } from 'express';
+import { Types } from 'mongoose';
 
 import Comment from '../models/Comment.model';
 import Photo from '../models/Photo.model';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
-import { deleteCachePattern } from '../utils/redis.utils';
+import { deleteCachePattern, getCache, setCache } from '../utils/redis.utils';
 
 type PhotoCommentsParams = {
   photoId: string;
+};
+
+type CommentParams = {
+  id: string;
 };
 
 type CreateCommentBody = {
@@ -18,6 +23,23 @@ type CreateCommentBody = {
 type PaginationQuery = {
   page?: string;
   limit?: string;
+};
+
+type CachedCommentsPayload = {
+  comments: Array<Record<string, unknown>>;
+  page: number;
+  limit: number;
+  totalPages: number;
+  total: number;
+  hasMore: boolean;
+  averageRating: number;
+  totalRatings: number;
+};
+
+type RatingSummaryPayload = {
+  averageRating: number;
+  totalRatings: number;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
 };
 
 const createError = (message: string, statusCode: number): AppError => {
@@ -36,46 +58,93 @@ const parsePaginationValue = (value: string | undefined, fallback: number): numb
   return numeric;
 };
 
+const commentsCacheKey = (photoId: string, page: number, limit: number): string => {
+  return `photos:comments:${photoId}:${page}:${limit}`;
+};
+
+const ratingCacheKey = (photoId: string): string => `photos:rating:${photoId}`;
+
+const normalizeAverage = (value?: number | null): number => {
+  if (!value || Number.isNaN(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 10) / 10;
+};
+
+const getRatingSummary = async (photoId: string): Promise<RatingSummaryPayload> => {
+  const cached = await getCache<RatingSummaryPayload>(ratingCacheKey(photoId));
+
+  if (cached) {
+    return cached;
+  }
+
+  const [summaryRow] = await Comment.aggregate([
+    {
+      $match: {
+        photo: new Types.ObjectId(photoId),
+        rating: { $gte: 1, $lte: 5 },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        averageRating: { $avg: '$rating' },
+        totalRatings: { $sum: 1 },
+        oneStar: {
+          $sum: {
+            $cond: [{ $eq: ['$rating', 1] }, 1, 0],
+          },
+        },
+        twoStar: {
+          $sum: {
+            $cond: [{ $eq: ['$rating', 2] }, 1, 0],
+          },
+        },
+        threeStar: {
+          $sum: {
+            $cond: [{ $eq: ['$rating', 3] }, 1, 0],
+          },
+        },
+        fourStar: {
+          $sum: {
+            $cond: [{ $eq: ['$rating', 4] }, 1, 0],
+          },
+        },
+        fiveStar: {
+          $sum: {
+            $cond: [{ $eq: ['$rating', 5] }, 1, 0],
+          },
+        },
+      },
+    },
+  ]);
+
+  const payload: RatingSummaryPayload = {
+    averageRating: normalizeAverage(summaryRow?.averageRating),
+    totalRatings: summaryRow?.totalRatings ?? 0,
+    distribution: {
+      '1': summaryRow?.oneStar ?? 0,
+      '2': summaryRow?.twoStar ?? 0,
+      '3': summaryRow?.threeStar ?? 0,
+      '4': summaryRow?.fourStar ?? 0,
+      '5': summaryRow?.fiveStar ?? 0,
+    },
+  };
+
+  await setCache(ratingCacheKey(photoId), payload, 60);
+
+  return payload;
+};
+
 const invalidateCommentCaches = async (photoId: string): Promise<void> => {
   await Promise.allSettled([
     deleteCachePattern(`photos:detail:${photoId}*`),
     deleteCachePattern('photos:list:*'),
+    deleteCachePattern(`photos:comments:${photoId}:*`),
+    deleteCachePattern(`photos:rating:${photoId}*`),
   ]);
 };
-
-/**
- * Returns paginated comments for a photo sorted newest first.
- */
-export const getCommentsByPhoto = asyncHandler(async (req: Request<PhotoCommentsParams, unknown, unknown, PaginationQuery>, res: Response) => {
-  const page = parsePaginationValue(req.query.page, 1);
-  const limit = Math.min(parsePaginationValue(req.query.limit, 20), 50);
-  const skip = (page - 1) * limit;
-
-  const [comments, total] = await Promise.all([
-    Comment.find({ photo: req.params.photoId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('author', 'username avatar')
-      .lean(),
-    Comment.countDocuments({ photo: req.params.photoId }),
-  ]);
-
-  const totalPages = Math.max(Math.ceil(total / limit), 1);
-
-  return res.status(200).json({
-    success: true,
-    message: 'Comments fetched successfully',
-    data: {
-      comments,
-      page,
-      limit,
-      totalPages,
-      total,
-      hasMore: page < totalPages,
-    },
-  });
-});
 
 /**
  * Creates a comment on a photo for authenticated users.
@@ -87,8 +156,8 @@ export const createComment = asyncHandler(async (req: Request<PhotoCommentsParam
 
   const text = req.body.text?.trim();
 
-  if (!text) {
-    throw createError('Comment text is required', 400);
+  if (!text || text.length < 1 || text.length > 500) {
+    throw createError('Comment must be between 1 and 500 characters', 400);
   }
 
   const photo = await Photo.findOne({ _id: req.params.photoId, isPublished: true }).select('_id');
@@ -97,7 +166,32 @@ export const createComment = asyncHandler(async (req: Request<PhotoCommentsParam
     throw createError('Photo not found', 404);
   }
 
-  const rating = typeof req.body.rating === 'number' && req.body.rating >= 1 && req.body.rating <= 5 ? req.body.rating : undefined;
+  const rawRating = req.body.rating;
+  const hasRatingInput = rawRating !== undefined && rawRating !== null;
+
+  if (hasRatingInput && req.user.role !== 'consumer') {
+    throw createError('Only consumers can add ratings', 403);
+  }
+
+  const rating = typeof rawRating === 'number' && rawRating >= 1 && rawRating <= 5 ? rawRating : undefined;
+
+  if (hasRatingInput && rating === undefined) {
+    throw createError('Rating must be between 1 and 5', 400);
+  }
+
+  if (rating !== undefined) {
+    const existingRating = await Comment.findOne({
+      photo: photo._id,
+      author: req.user.id,
+      rating: { $gte: 1, $lte: 5 },
+    })
+      .select('_id')
+      .lean();
+
+    if (existingRating) {
+      throw createError('You can rate this photo only once', 409);
+    }
+  }
 
   const comment = await Comment.create({
     text,
@@ -108,7 +202,7 @@ export const createComment = asyncHandler(async (req: Request<PhotoCommentsParam
 
   const populatedComment = await Comment.findById(comment._id).populate('author', 'username avatar').lean();
 
-+  await invalidateCommentCaches(req.params.photoId);
+  await invalidateCommentCaches(req.params.photoId);
 
   return res.status(201).json({
     success: true,
@@ -116,5 +210,175 @@ export const createComment = asyncHandler(async (req: Request<PhotoCommentsParam
     data: {
       comment: populatedComment,
     },
+  });
+});
+
+/**
+ * Returns paginated comments for a photo sorted newest first.
+ */
+export const getComments = asyncHandler(async (req: Request<PhotoCommentsParams, unknown, unknown, PaginationQuery>, res: Response) => {
+  const photoId = req.params.photoId;
+  const page = parsePaginationValue(req.query.page, 1);
+  const limit = Math.min(parsePaginationValue(req.query.limit, 20), 50);
+  const skip = (page - 1) * limit;
+  const cacheKey = commentsCacheKey(photoId, page, limit);
+
+  const cached = await getCache<CachedCommentsPayload>(cacheKey);
+  const ratingSummary = await getRatingSummary(photoId);
+
+  if (cached) {
+    let userHasRated = false;
+    let userRating: number | null = null;
+
+    if (req.user?.id) {
+      const rated = await Comment.findOne({
+        photo: photoId,
+        author: req.user.id,
+        rating: { $gte: 1, $lte: 5 },
+      })
+        .select('rating')
+        .lean();
+
+      userHasRated = Boolean(rated);
+      userRating = rated?.rating ?? null;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Comments fetched successfully',
+      data: {
+        comments: cached.comments,
+        page: cached.page,
+        limit: cached.limit,
+        totalPages: cached.totalPages,
+        total: cached.total,
+        hasMore: cached.hasMore,
+        averageRating: ratingSummary.averageRating,
+        totalRatings: ratingSummary.totalRatings,
+        distribution: ratingSummary.distribution,
+        userHasRated,
+        userRating,
+      },
+    });
+  }
+
+  const [comments, total] = await Promise.all([
+    Comment.find({ photo: photoId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('author', 'username avatar')
+      .lean(),
+    Comment.countDocuments({ photo: photoId }),
+  ]);
+
+  const totalPages = Math.max(Math.ceil(total / limit), 1);
+  const hasMore = page < totalPages;
+
+  await setCache(
+    cacheKey,
+    {
+      comments: comments as unknown as Array<Record<string, unknown>>,
+      page,
+      limit,
+      totalPages,
+      total,
+      hasMore,
+      averageRating: ratingSummary.averageRating,
+      totalRatings: ratingSummary.totalRatings,
+    } satisfies CachedCommentsPayload,
+    30,
+  );
+
+  let userHasRated = false;
+  let userRating: number | null = null;
+
+  if (req.user?.id) {
+    const rated = await Comment.findOne({
+      photo: photoId,
+      author: req.user.id,
+      rating: { $gte: 1, $lte: 5 },
+    })
+      .select('rating')
+      .lean();
+
+    userHasRated = Boolean(rated);
+    userRating = rated?.rating ?? null;
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: 'Comments fetched successfully',
+    data: {
+      comments,
+      page,
+      limit,
+      totalPages,
+      total,
+      hasMore,
+      averageRating: ratingSummary.averageRating,
+      totalRatings: ratingSummary.totalRatings,
+      distribution: ratingSummary.distribution,
+      userHasRated,
+      userRating,
+    },
+  });
+});
+
+/**
+ * Deletes a comment by owner or by the photo creator.
+ */
+export const deleteComment = asyncHandler(async (req: Request<CommentParams>, res: Response) => {
+  if (!req.user) {
+    throw createError('Unauthorized', 401);
+  }
+
+  const comment = await Comment.findById(req.params.id).select('author photo').lean();
+
+  if (!comment) {
+    throw createError('Comment not found', 404);
+  }
+
+  const isOwner = String(comment.author) === req.user.id;
+
+  if (!isOwner) {
+    const photo = await Photo.findById(comment.photo).select('creator').lean();
+
+    if (!photo) {
+      throw createError('Photo not found', 404);
+    }
+
+    const canManagePhotoComments = String(photo.creator) === req.user.id || req.user.role === 'admin';
+
+    if (!canManagePhotoComments) {
+      throw createError('You are not allowed to delete this comment', 403);
+    }
+  }
+
+  await Comment.findByIdAndDelete(req.params.id);
+  await invalidateCommentCaches(String(comment.photo));
+
+  return res.status(200).json({
+    success: true,
+    message: 'Comment deleted successfully',
+  });
+});
+
+/**
+ * Returns rating average, count, and distribution for a photo.
+ */
+export const getPhotoRating = asyncHandler(async (req: Request<PhotoCommentsParams>, res: Response) => {
+  const photo = await Photo.findOne({ _id: req.params.photoId, isPublished: true }).select('_id').lean();
+
+  if (!photo) {
+    throw createError('Photo not found', 404);
+  }
+
+  const ratingSummary = await getRatingSummary(req.params.photoId);
+
+  return res.status(200).json({
+    success: true,
+    message: 'Photo rating fetched successfully',
+    data: ratingSummary,
   });
 });
