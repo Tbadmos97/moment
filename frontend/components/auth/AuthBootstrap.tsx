@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useAuthStore } from '@/store/authStore';
 
@@ -8,11 +8,16 @@ import { useAuthStore } from '@/store/authStore';
  * Restores auth session once at app startup.
  */
 export default function AuthBootstrap(): null {
-  const initializeAuth = useAuthStore((state) => state.initializeAuth);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    void initializeAuth();
-  }, [initializeAuth]);
+    if (initializedRef.current) {
+      return;
+    }
+
+    initializedRef.current = true;
+    void useAuthStore.getState().initializeAuth();
+  }, []);
 
   return null;
 }

@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import ConsumerFeed from '@/components/consumer/ConsumerFeed';
 
-export default function DiscoverPage(): never {
-  redirect('/');
+export default function DiscoverPage(): JSX.Element {
+  return <ConsumerFeed />;
 }

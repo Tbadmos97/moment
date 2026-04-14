@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { useAuthStore } from '@/store/authStore';
@@ -15,6 +15,7 @@ interface AuthGuardProps {
  */
 export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX.Element {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isAuthenticated, isLoading } = useAuthStore((state) => ({
     user: state.user,
     isAuthenticated: state.isAuthenticated,
@@ -27,7 +28,9 @@ export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX
     }
 
     if (!isAuthenticated || !user) {
-      router.replace('/login');
+      if (pathname !== '/') {
+        router.replace('/');
+      }
       return;
     }
 
@@ -36,9 +39,13 @@ export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX
     }
 
     if (!allowRoles.includes(user.role)) {
-      router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/');
+      const fallback = user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover';
+
+      if (pathname !== fallback) {
+        router.replace(fallback);
+      }
     }
-  }, [allowRoles, isAuthenticated, isLoading, router, user]);
+  }, [allowRoles, isAuthenticated, isLoading, pathname, router, user]);
 
   if (isLoading) {
     return (

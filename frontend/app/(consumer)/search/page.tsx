@@ -4,7 +4,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import Masonry from 'react-masonry-css';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useInView } from 'react-intersection-observer';
 
 import PhotoCard, { PhotoCardSkeleton } from '@/components/consumer/PhotoCard';
@@ -37,6 +37,7 @@ export default function SearchPage(): JSX.Element {
   const [submittedTerm, setSubmittedTerm] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { ref, inView } = useInView({ rootMargin: '400px' });
+  const pendingFetchRef = useRef(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -67,13 +68,22 @@ export default function SearchPage(): JSX.Element {
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
   });
 
+  const {
+    hasNextPage: searchHasNextPage,
+    isFetchingNextPage: searchIsFetchingNextPage,
+    fetchNextPage: fetchNextSearchPage,
+  } = searchQuery;
+
   useEffect(() => {
-    if (!inView || !searchQuery.hasNextPage || searchQuery.isFetchingNextPage) {
+    if (!inView || !searchHasNextPage || searchIsFetchingNextPage || pendingFetchRef.current) {
       return;
     }
 
-    void searchQuery.fetchNextPage();
-  }, [inView, searchQuery]);
+    pendingFetchRef.current = true;
+    void fetchNextSearchPage().finally(() => {
+      pendingFetchRef.current = false;
+    });
+  }, [inView, searchHasNextPage, searchIsFetchingNextPage, fetchNextSearchPage]);
 
   const photos = useMemo(() => searchQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [searchQuery.data?.pages]);
 

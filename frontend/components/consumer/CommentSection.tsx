@@ -73,13 +73,19 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
     },
   });
 
+  const {
+    hasNextPage: commentsHasNextPage,
+    isFetchingNextPage: commentsIsFetchingNextPage,
+    fetchNextPage: fetchNextCommentsPage,
+  } = commentsQuery;
+
   useEffect(() => {
-    if (!inView || !commentsQuery.hasNextPage || commentsQuery.isFetchingNextPage) {
+    if (!inView || !commentsHasNextPage || commentsIsFetchingNextPage) {
       return;
     }
 
-    void commentsQuery.fetchNextPage();
-  }, [commentsQuery, inView]);
+    void fetchNextCommentsPage();
+  }, [inView, commentsHasNextPage, commentsIsFetchingNextPage, fetchNextCommentsPage]);
 
   const comments = useMemo(() => commentsQuery.data?.pages.flatMap((page) => page.comments) ?? [], [commentsQuery.data?.pages]);
   const firstPage = commentsQuery.data?.pages[0];

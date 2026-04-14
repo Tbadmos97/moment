@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Masonry from 'react-masonry-css';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInView } from 'react-intersection-observer';
 import toast from 'react-hot-toast';
 
@@ -20,11 +20,12 @@ const masonryBreakpoints = {
   640: 2,
 };
 
-export default function ConsumerFeedPage(): JSX.Element {
+export default function ConsumerFeed(): JSX.Element {
   const queryClient = useQueryClient();
   const [sort, setSort] = useState<FeedSort>('latest');
   const [activeTag, setActiveTag] = useState<string | undefined>();
   const { ref, inView } = useInView({ rootMargin: '400px' });
+  const pendingFetchRef = useRef(false);
 
   const trendingTagsQuery = useQuery({
     queryKey: ['trending-tags'],
@@ -44,13 +45,22 @@ export default function ConsumerFeedPage(): JSX.Element {
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
   });
 
+  const {
+    hasNextPage: feedHasNextPage,
+    isFetchingNextPage: feedIsFetchingNextPage,
+    fetchNextPage: fetchNextFeedPage,
+  } = photosQuery;
+
   useEffect(() => {
-    if (!inView || !photosQuery.hasNextPage || photosQuery.isFetchingNextPage) {
+    if (!inView || !feedHasNextPage || feedIsFetchingNextPage || pendingFetchRef.current) {
       return;
     }
 
-    void photosQuery.fetchNextPage();
-  }, [inView, photosQuery]);
+    pendingFetchRef.current = true;
+    void fetchNextFeedPage().finally(() => {
+      pendingFetchRef.current = false;
+    });
+  }, [inView, feedHasNextPage, feedIsFetchingNextPage, fetchNextFeedPage]);
 
   const photos = useMemo(() => photosQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [photosQuery.data?.pages]);
 

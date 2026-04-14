@@ -35,6 +35,20 @@ export const registerUserValidation: ValidationChain[] = [
     .withMessage('Password must be between 8 and 128 characters')
     .matches(/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/)
     .withMessage('Password must include one uppercase letter, one number, and one special character'),
+  body('role').optional().isIn(['consumer', 'creator']).withMessage('Role must be either consumer or creator'),
+  body('creatorAccessCode')
+    .optional()
+    .isString()
+    .withMessage('creatorAccessCode must be a string')
+    .isLength({ min: 6, max: 128 })
+    .withMessage('creatorAccessCode must be between 6 and 128 characters'),
+  body('creatorAccessCode').custom((value, { req }) => {
+    if (req.body.role === 'creator' && (!value || String(value).trim().length === 0)) {
+      throw new Error('creatorAccessCode is required for creator registration');
+    }
+
+    return true;
+  }),
   body('bio').optional().trim().isLength({ max: 160 }).withMessage('Bio must be at most 160 characters'),
   body('avatar').optional().isURL().withMessage('Avatar must be a valid URL'),
 ];

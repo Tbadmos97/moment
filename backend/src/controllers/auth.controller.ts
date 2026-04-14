@@ -13,6 +13,8 @@ interface RegisterBody {
   username: string;
   email: string;
   password: string;
+  role?: 'creator' | 'consumer';
+  creatorAccessCode?: string;
   avatar?: string;
   bio?: string;
 }
@@ -74,7 +76,21 @@ const issueTokens = (userId: string, role: 'creator' | 'consumer' | 'admin') => 
  * Registers a new consumer user and returns an authenticated session.
  */
 export const register = asyncHandler(async (req: Request<unknown, unknown, RegisterBody>, res: Response) => {
-  const { username, email, password, avatar, bio } = req.body;
+  const { username, email, password, avatar, bio, role, creatorAccessCode } = req.body;
+
+  const requestedRole: 'creator' | 'consumer' = role === 'creator' ? 'creator' : 'consumer';
+
+  if (requestedRole === 'creator') {
+    const creatorSignupSecret = process.env.CREATOR_SIGNUP_SECRET?.trim();
+
+    if (!creatorSignupSecret) {
+      throw createError('Creator self-signup is currently unavailable', 403);
+    }
+
+    if (!creatorAccessCode || creatorAccessCode.trim() !== creatorSignupSecret) {
+      throw createError('Invalid creator access code', 403);
+    }
+  }
 
   const normalizedUsername = username.trim().toLowerCase();
   const normalizedEmail = email.trim().toLowerCase();
@@ -96,7 +112,7 @@ export const register = asyncHandler(async (req: Request<unknown, unknown, Regis
     username: normalizedUsername,
     email: normalizedEmail,
     password,
-    role: 'consumer',
+    role: requestedRole,
     avatar,
     bio,
   });

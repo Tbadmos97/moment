@@ -16,6 +16,8 @@ export interface RegisterPayload {
   username: string;
   email: string;
   password: string;
+  role?: 'creator' | 'consumer';
+  creatorAccessCode?: string;
 }
 
 interface AuthPayload {

@@ -21,13 +21,32 @@ type ApiError = Error & {
  */
 const app = express();
 
-const frontendOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:3000')
+const frontendOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const allowedOriginSet = new Set(frontendOrigins);
+
 app.use(helmet());
-app.use(cors({ origin: frontendOrigins, credentials: true }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOriginSet.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  }),
+);
 app.use(compression());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));

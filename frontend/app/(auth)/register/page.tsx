@@ -26,7 +26,16 @@ const registerSchema = z
       .min(8, 'Password must be at least 8 characters')
       .regex(/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/, 'Use one uppercase, one number, and one special character'),
     confirmPassword: z.string(),
+    accountType: z.enum(['consumer', 'creator']),
+    creatorAccessCode: z.string().optional(),
   })
+  .refine(
+    (values) => values.accountType === 'consumer' || (values.creatorAccessCode ?? '').trim().length >= 6,
+    {
+      message: 'Creator access code is required',
+      path: ['creatorAccessCode'],
+    },
+  )
   .refine((values) => values.password === values.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
@@ -76,11 +85,14 @@ export default function RegisterPage(): JSX.Element {
       email: '',
       password: '',
       confirmPassword: '',
+      accountType: 'consumer',
+      creatorAccessCode: '',
     },
   });
 
   const watchedUsername = watch('username');
   const watchedPassword = watch('password');
+  const watchedAccountType = watch('accountType');
 
   const passwordStrength = useMemo(() => calculatePasswordStrength(watchedPassword || ''), [watchedPassword]);
 
@@ -119,10 +131,12 @@ export default function RegisterPage(): JSX.Element {
         username: values.username,
         email: values.email,
         password: values.password,
+        role: values.accountType,
+        creatorAccessCode: values.accountType === 'creator' ? values.creatorAccessCode?.trim() : undefined,
       });
       const role = useAuthStore.getState().user?.role;
       toast.success(`Account created (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
-      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/');
+      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
     } catch {
       toast.error('Registration failed. Please try again.');
     }
@@ -133,7 +147,7 @@ export default function RegisterPage(): JSX.Element {
       return;
     }
 
-    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/');
+    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
   }, [isAuthenticated, isLoading, router, user]);
 
   return (
@@ -141,10 +155,45 @@ export default function RegisterPage(): JSX.Element {
       <p className="text-2xl font-display text-text-primary">Create Account</p>
       <p className="mt-2 text-sm text-text-secondary">Join MOMENT and start sharing stories.</p>
       <p className="mt-2 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-text-secondary">
-        Public signup creates a consumer account. Creator accounts are admin-created only.
+        Choose account type below. Creator registration requires a secure creator access code.
       </p>
 
       <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <div>
+          <label className="mb-1 block text-sm text-text-secondary">Account Type</label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="cursor-pointer">
+              <input type="radio" value="consumer" className="peer sr-only" {...register('accountType')} />
+              <span className="flex items-center justify-center rounded-xl border border-border bg-bg-card px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
+                Consumer
+              </span>
+            </label>
+            <label className="cursor-pointer">
+              <input type="radio" value="creator" className="peer sr-only" {...register('accountType')} />
+              <span className="flex items-center justify-center rounded-xl border border-border bg-bg-card px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
+                Creator
+              </span>
+            </label>
+          </div>
+          {errors.accountType ? <p className="mt-1 text-xs text-error">{errors.accountType.message}</p> : null}
+        </div>
+
+        {watchedAccountType === 'creator' ? (
+          <div>
+            <label className="mb-1 block text-sm text-text-secondary" htmlFor="creatorAccessCode">
+              Creator Access Code
+            </label>
+            <input
+              id="creatorAccessCode"
+              type="password"
+              className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+              placeholder="Enter secure creator code"
+              {...register('creatorAccessCode')}
+            />
+            {errors.creatorAccessCode ? <p className="mt-1 text-xs text-error">{errors.creatorAccessCode.message}</p> : null}
+          </div>
+        ) : null}
+
         <div>
           <label className="mb-1 block text-sm text-text-secondary" htmlFor="username">
             Username
@@ -225,9 +274,11 @@ export default function RegisterPage(): JSX.Element {
           {errors.confirmPassword ? <p className="mt-1 text-xs text-error">{errors.confirmPassword.message}</p> : null}
         </div>
 
-        <p className="rounded-xl border border-border bg-bg-card px-4 py-3 text-xs text-text-secondary">
-          Creator account? Contact admin for a dedicated creator profile.
-        </p>
+        {watchedAccountType === 'creator' ? (
+          <p className="rounded-xl border border-border bg-bg-card px-4 py-3 text-xs text-text-secondary">
+            Creator accounts need a valid creator access code configured by admin.
+          </p>
+        ) : null}
 
         <motion.button
           type="submit"
