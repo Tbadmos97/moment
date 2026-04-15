@@ -66,6 +66,13 @@ export const logoutValidation: ValidationChain[] = [
   body('refreshToken').trim().notEmpty().withMessage('refreshToken is required'),
 ];
 
+export const becomeCreatorValidation: ValidationChain[] = [
+  body('creatorAccessCode')
+    .trim()
+    .isLength({ min: 6, max: 128 })
+    .withMessage('creatorAccessCode must be between 6 and 128 characters'),
+];
+
 export const createPhotoValidation: ValidationChain[] = [
   body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 100 }).withMessage('Title max length is 100'),
   body('caption').optional().trim().isLength({ max: 500 }).withMessage('Caption max length is 500'),

@@ -19,7 +19,7 @@ export default function Header(): JSX.Element {
   const logout = useAuthStore((state) => state.logout);
   const userRole = useAuthStore((state) => state.user?.role);
 
-  const profileHref = userRole === 'creator' || userRole === 'admin' ? '/creator/profile' : '/discover';
+  const profileHref = userRole === 'creator' || userRole === 'admin' ? '/creator/profile' : '/profile';
 
   const handleLogout = async (): Promise<void> => {
     await logout();

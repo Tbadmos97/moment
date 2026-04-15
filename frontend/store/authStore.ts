@@ -46,6 +46,7 @@ export interface AuthState {
   register: (data: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshTokens: () => Promise<void>;
+  becomeCreator: (creatorAccessCode: string) => Promise<void>;
   setUser: (user: User) => void;
   initializeAuth: () => Promise<void>;
 }
@@ -152,6 +153,25 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: payload.refreshToken,
           isAuthenticated: true,
         });
+      },
+
+      becomeCreator: async (creatorAccessCode) => {
+        set({ isLoading: true });
+
+        try {
+          const response = await api.post<ApiResponse<AuthPayload>>('/auth/become-creator', {
+            creatorAccessCode,
+          });
+          const payload = response.data.data;
+
+          if (!payload) {
+            throw new Error('Invalid upgrade response');
+          }
+
+          applyAuth(payload, set);
+        } finally {
+          set({ isLoading: false });
+        }
       },
 
       setUser: (user) => {

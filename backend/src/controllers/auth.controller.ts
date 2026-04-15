@@ -32,6 +32,10 @@ interface LogoutBody {
   refreshToken: string;
 }
 
+interface BecomeCreatorBody {
+  creatorAccessCode: string;
+}
+
 const createError = (message: string, statusCode: number): AppError => {
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
@@ -242,6 +246,69 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
     message: 'User profile fetched successfully',
     data: {
       user: toPublicUser(user),
+    },
+  });
+});
+
+/**
+ * Upgrades an authenticated consumer account to creator after access-code verification.
+ */
+export const becomeCreator = asyncHandler(async (req: Request<unknown, unknown, BecomeCreatorBody>, res: Response) => {
+  if (!req.user) {
+    throw createError('Unauthorized', 401);
+  }
+
+  const creatorSignupSecret = process.env.CREATOR_SIGNUP_SECRET?.trim();
+
+  if (!creatorSignupSecret) {
+    throw createError('Creator upgrade is currently unavailable', 403);
+  }
+
+  const submittedCode = req.body.creatorAccessCode?.trim();
+
+  if (!submittedCode || submittedCode !== creatorSignupSecret) {
+    throw createError('Invalid creator access code', 403);
+  }
+
+  const user = await User.findById(req.user.id);
+
+  if (!user) {
+    throw createError('User not found', 404);
+  }
+
+  if (!user.isActive) {
+    throw createError('Account is deactivated', 403);
+  }
+
+  if (user.role === 'creator' || user.role === 'admin') {
+    const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
+    user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Account is already creator-enabled',
+      data: {
+        user: toPublicUser(user),
+        accessToken,
+        refreshToken,
+      },
+    });
+  }
+
+  user.role = 'creator';
+
+  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
+  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  await user.save();
+
+  return res.status(200).json({
+    success: true,
+    message: 'Account upgraded to creator',
+    data: {
+      user: toPublicUser(user),
+      accessToken,
+      refreshToken,
     },
   });
 });
