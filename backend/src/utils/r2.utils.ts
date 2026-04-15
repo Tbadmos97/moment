@@ -3,8 +3,6 @@ import path from 'path';
 
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
-const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL;
-
 const ensureValue = (value: string | undefined, variableName: string): string => {
   if (!value) {
     throw new Error(`${variableName} is required`);
@@ -51,6 +49,7 @@ export const uploadToR2 = async (
   isPublic = true,
 ): Promise<string> => {
   const { client, bucketName, endpoint } = getR2Config();
+  const publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL?.trim();
 
   await client.send(
     new PutObjectCommand({
@@ -65,8 +64,8 @@ export const uploadToR2 = async (
     }),
   );
 
-  if (R2_PUBLIC_URL) {
-    return `${R2_PUBLIC_URL.replace(/\/$/, '')}/${key}`;
+  if (publicUrl) {
+    return `${publicUrl.replace(/\/$/, '')}/${key}`;
   }
 
   return `${endpoint}/${bucketName}/${key}`;
