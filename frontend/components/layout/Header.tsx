@@ -17,6 +17,14 @@ export default function Header(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
+  const userRole = useAuthStore((state) => state.user?.role);
+
+  const profileHref = userRole === 'creator' || userRole === 'admin' ? '/creator/profile' : '/discover';
+
+  const handleLogout = async (): Promise<void> => {
+    await logout();
+    router.replace('/register');
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -89,9 +97,18 @@ export default function Header(): JSX.Element {
           <button className="rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary transition hover:text-accent-gold" type="button" aria-label="Notifications">
             <Bell size={18} />
           </button>
-          <Link href="/" className="rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary transition hover:text-accent-gold" aria-label="Profile">
+          <Link href={profileHref} className="rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary transition hover:text-accent-gold" aria-label="Profile">
             <User size={18} />
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              void handleLogout();
+            }}
+            className="rounded-full border border-border/70 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.14em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+          >
+            Logout
+          </button>
         </div>
 
         <button
@@ -148,12 +165,14 @@ export default function Header(): JSX.Element {
               <Link href="/discover" onClick={() => setDrawerOpen(false)} className="text-sm uppercase tracking-[0.18em] text-text-secondary">
                 Discover
               </Link>
+              <Link href={profileHref} onClick={() => setDrawerOpen(false)} className="text-sm uppercase tracking-[0.18em] text-text-secondary">
+                Profile
+              </Link>
 
               <button
                 type="button"
-                onClick={async () => {
-                  await logout();
-                  router.replace('/login');
+                onClick={() => {
+                  void handleLogout();
                 }}
                 className="mt-auto rounded-full border border-border bg-black/40 px-4 py-2 text-sm text-text-secondary"
               >
