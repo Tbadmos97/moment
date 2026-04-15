@@ -19,7 +19,8 @@ export default function Providers({ children }: ProvidersProps): JSX.Element {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60_000,
+            staleTime: 30_000,
+            gcTime: 300_000,
             retry: 1,
             refetchOnWindowFocus: false,
           },

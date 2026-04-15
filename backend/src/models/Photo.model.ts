@@ -144,6 +144,8 @@ export interface IPhoto extends PhotoSchema {
 }
 
 photoSchema.index({ creator: 1 });
+photoSchema.index({ creator: 1, createdAt: -1 });
+photoSchema.index({ isPublished: 1, createdAt: -1 });
 photoSchema.index({ tags: 1 });
 photoSchema.index({ createdAt: -1 });
 photoSchema.index({ title: 'text', caption: 'text', tags: 'text' });

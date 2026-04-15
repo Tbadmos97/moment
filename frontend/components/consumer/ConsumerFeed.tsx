@@ -3,8 +3,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Masonry from 'react-masonry-css';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useInView } from 'react-intersection-observer';
 
 import PhotoCard, { PhotoCardSkeleton } from '@/components/consumer/PhotoCard';
 import { fetchPhotos, fetchTrendingTags, likePhotoRequest, unlikePhotoRequest, type FeedSort, type PhotoFeedPayload } from '@/lib/consumer-api';
@@ -23,6 +24,8 @@ export default function ConsumerFeed(): JSX.Element {
   const queryClient = useQueryClient();
   const [sort, setSort] = useState<FeedSort>('latest');
   const [activeTag, setActiveTag] = useState<string | undefined>();
+  const pendingFetchRef = useRef(false);
+  const { ref: sentinelRef, inView } = useInView({ rootMargin: '320px' });
 
   const trendingTagsQuery = useQuery({
     queryKey: ['trending-tags'],
@@ -43,6 +46,20 @@ export default function ConsumerFeed(): JSX.Element {
   });
 
   const photos = useMemo(() => photosQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [photosQuery.data?.pages]);
+  const hasNextPage = photosQuery.hasNextPage;
+  const isFetchingNextPage = photosQuery.isFetchingNextPage;
+  const fetchNextPage = photosQuery.fetchNextPage;
+
+  useEffect(() => {
+    if (!inView || !hasNextPage || isFetchingNextPage || pendingFetchRef.current) {
+      return;
+    }
+
+    pendingFetchRef.current = true;
+    void fetchNextPage().finally(() => {
+      pendingFetchRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, inView, isFetchingNextPage]);
 
   const likeMutation = useMutation({
     mutationFn: async ({ photoId, nextLiked }: { photoId: string; nextLiked: boolean }) => {
@@ -205,6 +222,7 @@ export default function ConsumerFeed(): JSX.Element {
       ) : null}
 
       <div className="pt-6 text-center">
+        <div ref={sentinelRef} className="h-px w-full" />
         {photosQuery.hasNextPage ? (
           <button
             type="button"

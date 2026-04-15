@@ -1,10 +1,13 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Heart } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
+import { fetchPhotoById } from '@/lib/consumer-api';
 import type { Photo } from '@/types';
 
 type PhotoCardProps = {
@@ -25,6 +28,7 @@ export function PhotoCardSkeleton({ index }: { index: number }): JSX.Element {
 
 export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps): JSX.Element {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isLiking, setIsLiking] = useState(false);
   const [liked, setLiked] = useState(Boolean(photo.isLiked));
   const [likesCount, setLikesCount] = useState(photo.likesCount);
@@ -32,8 +36,8 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
   const displayImage = photo.imageUrl || photo.thumbnailUrl;
 
   const aspectPadding = useMemo(() => {
-    const width = (photo as Photo & { width?: number }).width ?? 1;
-    const height = (photo as Photo & { height?: number }).height ?? 1;
+    const width = photo.width ?? 1;
+    const height = photo.height ?? 1;
     const ratio = Math.max(Math.min((height / width) * 100, 180), 70);
     return `${ratio}%`;
   }, [photo]);
@@ -67,13 +71,22 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
       transition={{ delay: index * 0.05, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className="group mb-4 cursor-zoom-in overflow-hidden rounded-2xl"
       onClick={() => router.push(`/photos/${photo._id}`)}
+      onMouseEnter={() => {
+        void queryClient.prefetchQuery({
+          queryKey: ['photo-detail', photo._id],
+          queryFn: () => fetchPhotoById(photo._id),
+          staleTime: 30_000,
+        });
+      }}
     >
       <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
-        <img
+        <Image
           src={displayImage}
           alt={photo.title}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          priority={index < 4}
           className="absolute inset-0 h-full w-full object-cover"
-          loading="lazy"
         />
 
         <motion.div
@@ -92,7 +105,13 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 overflow-hidden rounded-full border border-white/30 bg-white/10">
                   {photo.creator?.avatar ? (
-                    <img src={photo.creator.avatar} alt={photo.creator.username} className="h-full w-full object-cover" />
+                    <Image
+                      src={photo.creator.avatar}
+                      alt={photo.creator.username}
+                      width={32}
+                      height={32}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs uppercase text-white">
                       {photo.creator?.username?.slice(0, 2) || 'MO'}

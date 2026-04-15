@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Star } from 'lucide-react';
+import Image from 'next/image';
 import { ChangeEvent, KeyboardEvent, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -225,7 +226,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-bg-card">
             {user?.avatar ? (
-              <img src={user.avatar} alt={user.username} className="h-full w-full object-cover" />
+              <Image src={user.avatar} alt={user.username} width={40} height={40} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs uppercase text-text-secondary">
                 {(user?.username || 'MO').slice(0, 2)}

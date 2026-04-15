@@ -8,6 +8,7 @@ dotenv.config();
 const PORT = Number(process.env.PORT ?? 5000);
 const MONGODB_URI = process.env.MONGODB_URI;
 const MAX_RETRIES = 3;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 if (!MONGODB_URI) {
   throw new Error('MONGODB_URI is required');
@@ -27,7 +28,10 @@ const wait = async (ms: number): Promise<void> => {
  */
 const connectWithRetry = async (attempt = 1): Promise<void> => {
   try {
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, {
+      maxPoolSize: IS_PRODUCTION ? 100 : 10,
+      minPoolSize: IS_PRODUCTION ? 5 : 1,
+    });
     // eslint-disable-next-line no-console
     console.log('Connected to MongoDB Atlas');
   } catch (error) {

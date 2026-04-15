@@ -13,27 +13,30 @@ export interface ProcessedImageResult {
  * Produces optimized web images and thumbnails while stripping metadata.
  */
 export const processImage = async (buffer: Buffer): Promise<ProcessedImageResult> => {
-  const metadata = await sharp(buffer).metadata();
+  const base = sharp(buffer).rotate();
+  const metadata = await base.metadata();
 
   const width = metadata.width ?? 0;
   const height = metadata.height ?? 0;
 
   const processedBuffer = await sharp(buffer)
+    .rotate()
     .resize({
-      width: 2048,
+      width: 1920,
       fit: 'inside',
       withoutEnlargement: true,
     })
-    .webp({ quality: 85 })
+    .webp({ quality: 82, effort: 5, smartSubsample: true })
     .toBuffer();
 
   const thumbnailBuffer = await sharp(buffer)
+    .rotate()
     .resize({
-      width: 400,
+      width: 600,
       fit: 'inside',
       withoutEnlargement: true,
     })
-    .webp({ quality: 70 })
+    .webp({ quality: 70, effort: 4, smartSubsample: true })
     .toBuffer();
 
   return {

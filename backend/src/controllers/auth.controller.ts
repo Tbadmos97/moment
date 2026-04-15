@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import User from '../models/User.model';
+import cacheService from '../services/cache.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
 import {
@@ -8,6 +9,12 @@ import {
   generateRefreshToken,
   verifyRefreshToken,
 } from '../utils/jwt.utils';
+import {
+  CACHE_KEY_FACTORIES,
+  CACHE_TTL_SECONDS,
+  getCache,
+  setCache,
+} from '../utils/redis.utils';
 
 interface RegisterBody {
   username: string;
@@ -132,6 +139,11 @@ export const register = asyncHandler(async (req: Request<unknown, unknown, Regis
 
   user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
   await user.save();
+  await Promise.all([
+    cacheService.invalidateUsernameCheck(),
+    cacheService.invalidateUserProfile(String(user._id)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(201).json({
     success: true,
@@ -164,6 +176,7 @@ export const login = asyncHandler(async (req: Request<unknown, unknown, LoginBod
 
   user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
   await user.save();
+  await cacheService.invalidateUserProfile(String(user._id));
 
   return res.status(200).json({
     success: true,
@@ -199,6 +212,7 @@ export const refreshToken = asyncHandler(async (req: Request<unknown, unknown, R
     user.refreshTokens.filter((token) => token !== oldRefreshToken).concat(newRefreshToken),
   );
   await user.save();
+  await cacheService.invalidateUserProfile(String(user._id));
 
   return res.status(200).json({
     success: true,
@@ -227,6 +241,7 @@ export const logout = asyncHandler(async (req: Request<unknown, unknown, LogoutB
 
   user.refreshTokens = user.refreshTokens.filter((token) => token !== tokenToRevoke);
   await user.save();
+  await cacheService.invalidateUserProfile(String(user._id));
 
   return res.status(200).json({
     success: true,
@@ -242,18 +257,34 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
     throw createError('Unauthorized', 401);
   }
 
-  const user = await User.findById(req.user.id);
+  const cacheKey = CACHE_KEY_FACTORIES.userProfile(req.user.id);
+  const cached = await getCache<{ user: ReturnType<typeof toPublicUser> }>(cacheKey);
+
+  if (cached?.user) {
+    return res.status(200).json({
+      success: true,
+      message: 'User profile fetched successfully',
+      data: cached,
+      fromCache: true,
+    });
+  }
+
+  const user = await User.findById(req.user.id).select('_id username email role avatar').lean();
 
   if (!user) {
     throw createError('User not found', 404);
   }
 
+  const payload = {
+    user: toPublicUser(user),
+  };
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.USER_PROFILE);
+
   return res.status(200).json({
     success: true,
     message: 'User profile fetched successfully',
-    data: {
-      user: toPublicUser(user),
-    },
+    data: payload,
   });
 });
 
@@ -291,6 +322,7 @@ export const becomeCreator = asyncHandler(async (req: Request<unknown, unknown, 
     const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
     user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
     await user.save();
+    await cacheService.invalidateUserProfile(String(user._id));
 
     return res.status(200).json({
       success: true,
@@ -308,6 +340,10 @@ export const becomeCreator = asyncHandler(async (req: Request<unknown, unknown, 
   const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
   user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
   await user.save();
+  await Promise.all([
+    cacheService.invalidateUserProfile(String(user._id)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,
@@ -350,6 +386,11 @@ export const adminCreateCreator = asyncHandler(async (req: Request<unknown, unkn
     avatar,
     bio,
   });
+
+  await Promise.all([
+    cacheService.invalidateUsernameCheck(),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(201).json({
     success: true,
@@ -408,6 +449,11 @@ export const setupInitialAdmin = asyncHandler(async (req: Request<unknown, unkno
   const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
   user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
   await user.save();
+  await Promise.all([
+    cacheService.invalidateUsernameCheck(),
+    cacheService.invalidateUserProfile(String(user._id)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(201).json({
     success: true,

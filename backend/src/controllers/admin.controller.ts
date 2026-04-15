@@ -3,8 +3,15 @@ import type { Request, Response } from 'express';
 import Comment from '../models/Comment.model';
 import Photo from '../models/Photo.model';
 import User from '../models/User.model';
+import cacheService from '../services/cache.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
+import {
+  CACHE_KEY_FACTORIES,
+  CACHE_TTL_SECONDS,
+  getCache,
+  setCache,
+} from '../utils/redis.utils';
 
 type RoleFilter = 'creator' | 'consumer' | 'admin' | 'all';
 
@@ -55,6 +62,22 @@ const parsePagination = (pageRaw?: string, limitRaw?: string) => {
 };
 
 export const getAdminOverview = asyncHandler(async (_req: Request, res: Response) => {
+  const cacheKey = CACHE_KEY_FACTORIES.adminOverview();
+  const cached = await getCache<{
+    users: { total: number; creators: number; consumers: number; admins: number; newToday: number };
+    photos: { total: number; published: number; drafts: number; uploadedToday: number };
+    comments: { total: number };
+  }>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Admin overview fetched successfully',
+      data: cached,
+      fromCache: true,
+    });
+  }
+
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -72,27 +95,31 @@ export const getAdminOverview = asyncHandler(async (_req: Request, res: Response
       Photo.countDocuments({ createdAt: { $gte: startOfDay } }),
     ]);
 
+  const payload = {
+    users: {
+      total: totalUsers,
+      creators: totalCreators,
+      consumers: totalConsumers,
+      admins: totalAdmins,
+      newToday: newUsersToday,
+    },
+    photos: {
+      total: totalPhotos,
+      published: publishedPhotos,
+      drafts: draftPhotos,
+      uploadedToday: uploadsToday,
+    },
+    comments: {
+      total: totalComments,
+    },
+  };
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.CREATOR_DASHBOARD);
+
   return res.status(200).json({
     success: true,
     message: 'Admin overview fetched successfully',
-    data: {
-      users: {
-        total: totalUsers,
-        creators: totalCreators,
-        consumers: totalConsumers,
-        admins: totalAdmins,
-        newToday: newUsersToday,
-      },
-      photos: {
-        total: totalPhotos,
-        published: publishedPhotos,
-        drafts: draftPhotos,
-        uploadedToday: uploadsToday,
-      },
-      comments: {
-        total: totalComments,
-      },
-    },
+    data: payload,
   });
 });
 
@@ -100,6 +127,24 @@ export const getAdminUsers = asyncHandler(async (req: Request<unknown, unknown, 
   const { page, limit, skip } = parsePagination(req.query.page, req.query.limit);
   const role = req.query.role ?? 'all';
   const search = req.query.search?.trim().toLowerCase();
+  const cacheKey = CACHE_KEY_FACTORIES.adminUsers(page, limit, role, search);
+  const cached = await getCache<{
+    users: unknown[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  }>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Admin user list fetched successfully',
+      data: cached,
+      fromCache: true,
+    });
+  }
 
   const filter: Record<string, unknown> = {};
 
@@ -124,17 +169,21 @@ export const getAdminUsers = asyncHandler(async (req: Request<unknown, unknown, 
     User.countDocuments(filter),
   ]);
 
+  const payload = {
+    users,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit) || 1,
+    hasMore: skip + users.length < total,
+  };
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.ADMIN_LIST);
+
   return res.status(200).json({
     success: true,
     message: 'Admin user list fetched successfully',
-    data: {
-      users,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-      hasMore: skip + users.length < total,
-    },
+    data: payload,
   });
 });
 
@@ -163,6 +212,10 @@ export const updateUserRoleByAdmin = asyncHandler(
 
     user.role = role;
     await user.save();
+    await Promise.all([
+      cacheService.invalidateUserProfile(String(user._id)),
+      cacheService.invalidateAdminCaches(),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -205,6 +258,10 @@ export const updateUserStatusByAdmin = asyncHandler(
 
     user.isActive = isActive;
     await user.save();
+    await Promise.all([
+      cacheService.invalidateUserProfile(String(user._id)),
+      cacheService.invalidateAdminCaches(),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -226,6 +283,24 @@ export const getAdminPhotos = asyncHandler(async (req: Request<unknown, unknown,
   const { page, limit, skip } = parsePagination(req.query.page, req.query.limit);
   const search = req.query.search?.trim();
   const status = req.query.status ?? 'all';
+  const cacheKey = CACHE_KEY_FACTORIES.adminPhotos(page, limit, status, search);
+  const cached = await getCache<{
+    photos: unknown[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  }>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Admin photo list fetched successfully',
+      data: cached,
+      fromCache: true,
+    });
+  }
 
   const filter: Record<string, unknown> = {};
 
@@ -254,17 +329,21 @@ export const getAdminPhotos = asyncHandler(async (req: Request<unknown, unknown,
     Photo.countDocuments(filter),
   ]);
 
+  const payload = {
+    photos,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit) || 1,
+    hasMore: skip + photos.length < total,
+  };
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.ADMIN_LIST);
+
   return res.status(200).json({
     success: true,
     message: 'Admin photo list fetched successfully',
-    data: {
-      photos,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-      hasMore: skip + photos.length < total,
-    },
+    data: payload,
   });
 });
 
@@ -285,6 +364,11 @@ export const setPhotoPublishStateByAdmin = asyncHandler(
 
     photo.isPublished = isPublished;
     await photo.save();
+    await Promise.all([
+      cacheService.invalidatePhotoDetailAndLists(String(photo._id)),
+      cacheService.invalidateCreatorDashboard(String(photo.creator)),
+      cacheService.invalidateAdminCaches(),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -309,6 +393,11 @@ export const deletePhotoByAdmin = asyncHandler(async (req: Request<{ photoId: st
   }
 
   await photo.deleteOne();
+  await Promise.all([
+    cacheService.invalidatePhotoDetailAndLists(String(photo._id)),
+    cacheService.invalidateCreatorDashboard(String(photo.creator)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,
@@ -319,6 +408,24 @@ export const deletePhotoByAdmin = asyncHandler(async (req: Request<{ photoId: st
 export const getAdminComments = asyncHandler(async (req: Request<unknown, unknown, unknown, CommentsQuery>, res: Response) => {
   const { page, limit, skip } = parsePagination(req.query.page, req.query.limit);
   const search = req.query.search?.trim();
+  const cacheKey = CACHE_KEY_FACTORIES.adminComments(page, limit, search);
+  const cached = await getCache<{
+    comments: unknown[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  }>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Admin comment list fetched successfully',
+      data: cached,
+      fromCache: true,
+    });
+  }
 
   const filter: Record<string, unknown> = {};
 
@@ -338,17 +445,21 @@ export const getAdminComments = asyncHandler(async (req: Request<unknown, unknow
     Comment.countDocuments(filter),
   ]);
 
+  const payload = {
+    comments,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit) || 1,
+    hasMore: skip + comments.length < total,
+  };
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.ADMIN_LIST);
+
   return res.status(200).json({
     success: true,
     message: 'Admin comment list fetched successfully',
-    data: {
-      comments,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-      hasMore: skip + comments.length < total,
-    },
+    data: payload,
   });
 });
 
@@ -362,6 +473,10 @@ export const deleteCommentByAdmin = asyncHandler(async (req: Request<{ commentId
   }
 
   await comment.deleteOne();
+  await Promise.all([
+    cacheService.invalidatePhotoInteractions(String(comment.photo)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,

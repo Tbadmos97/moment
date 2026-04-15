@@ -4,10 +4,16 @@ import { Types } from 'mongoose';
 import Comment from '../models/Comment.model';
 import Like from '../models/Like.model';
 import Photo from '../models/Photo.model';
+import cacheService from '../services/cache.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
 import { deleteFromR2, generateUniqueKey, uploadToR2 } from '../utils/r2.utils';
-import { deleteCachePattern, getCache, setCache } from '../utils/redis.utils';
+import {
+  CACHE_KEY_FACTORIES,
+  CACHE_TTL_SECONDS,
+  getCache,
+  setCache,
+} from '../utils/redis.utils';
 import { processImage } from '../utils/imageProcessor.utils';
 
 type UploadPhotoBody = {
@@ -131,23 +137,6 @@ const normalizePhoto = (photo: Record<string, unknown>, userId?: string): Record
   };
 };
 
-const listCacheKey = (page: number, limit: number, sort: PhotosSort, tag?: string, search?: string): string => {
-  return `photos:list:${page}:${limit}:${sort}:${tag ?? ''}:${search ?? ''}`;
-};
-
-const detailCacheKey = (photoId: string): string => `photos:detail:${photoId}`;
-
-const invalidatePhotoCache = async (photoId?: string): Promise<void> => {
-  try {
-    await deleteCachePattern('photos:list:*');
-    if (photoId) {
-      await deleteCachePattern(`${detailCacheKey(photoId)}*`);
-    }
-  } catch {
-    // Cache invalidation should never break write operations.
-  }
-};
-
 const incrementPhotoViewCount = (photoId: string): void => {
   setImmediate(() => {
     void Photo.updateOne({ _id: photoId }, { $inc: { viewsCount: 1 } }).catch(() => undefined);
@@ -166,7 +155,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
   const search = req.query.search?.trim();
   const skip = (page - 1) * limit;
 
-  const cacheKey = listCacheKey(page, limit, normalizedSort, tag, search);
+  const cacheKey = CACHE_KEY_FACTORIES.photosList(page, limit, normalizedSort, tag, search);
   const cached = await getCache<CachedListPayload>(cacheKey);
 
   if (cached) {
@@ -175,6 +164,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
     return res.status(200).json({
       success: true,
       message: 'Photos fetched successfully',
+      fromCache: true,
       data: {
         photos: mappedItems,
         page: cached.page,
@@ -258,6 +248,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
 
     const [photos, totalCount] = await Promise.all([
       Photo.find(baseFilter)
+        .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
         .sort(sortQuery)
         .skip(skip)
         .limit(limit)
@@ -283,7 +274,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
       total,
       hasMore,
     } satisfies CachedListPayload,
-    60,
+    CACHE_TTL_SECONDS.PHOTOS_LIST,
   );
 
   const photos = items.map((item) => normalizePhoto(item, req.user?.id));
@@ -307,7 +298,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
  */
 export const getPhotoById = asyncHandler(async (req: Request<PhotoIdParams>, res: Response) => {
   const photoId = req.params.id;
-  const cacheKey = detailCacheKey(photoId);
+  const cacheKey = CACHE_KEY_FACTORIES.photoDetail(photoId);
   const cached = await getCache<CachedPhotoDetail>(cacheKey);
 
   incrementPhotoViewCount(photoId);
@@ -316,6 +307,7 @@ export const getPhotoById = asyncHandler(async (req: Request<PhotoIdParams>, res
     return res.status(200).json({
       success: true,
       message: 'Photo fetched successfully',
+      fromCache: true,
       data: {
         photo: normalizePhoto(cached.photo, req.user?.id),
       },
@@ -323,6 +315,7 @@ export const getPhotoById = asyncHandler(async (req: Request<PhotoIdParams>, res
   }
 
   const photo = await Photo.findOne({ _id: photoId, isPublished: true })
+    .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
     .populate('creator', '-password -refreshTokens')
     .lean();
 
@@ -346,7 +339,7 @@ export const getPhotoById = asyncHandler(async (req: Request<PhotoIdParams>, res
     {
       photo: photoWithComments as AnyDoc,
     } satisfies CachedPhotoDetail,
-    120,
+    CACHE_TTL_SECONDS.PHOTO_DETAIL,
   );
 
   return res.status(200).json({
@@ -365,9 +358,29 @@ export const getPhotosByCreator = asyncHandler(async (req: Request<CreatorPhotos
   const page = parsePaginationValue(req.query.page, 1);
   const limit = Math.min(parsePaginationValue(req.query.limit, 20), 50);
   const skip = (page - 1) * limit;
+  const cacheKey = CACHE_KEY_FACTORIES.creatorPhotos(req.params.userId, page, limit);
+
+  const cached = await getCache<CachedListPayload>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Creator photos fetched successfully',
+      fromCache: true,
+      data: {
+        photos: cached.items.map((photo) => normalizePhoto(photo, req.user?.id)),
+        page: cached.page,
+        limit: cached.limit,
+        totalPages: cached.totalPages,
+        total: cached.total,
+        hasMore: cached.hasMore,
+      },
+    });
+  }
 
   const [photos, total] = await Promise.all([
     Photo.find({ creator: req.params.userId, isPublished: true })
+      .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -377,6 +390,19 @@ export const getPhotosByCreator = asyncHandler(async (req: Request<CreatorPhotos
   ]);
 
   const totalPages = Math.max(Math.ceil(total / limit), 1);
+
+  await setCache(
+    cacheKey,
+    {
+      items: photos as unknown as AnyDoc[],
+      page,
+      limit,
+      totalPages,
+      total,
+      hasMore: page < totalPages,
+    } satisfies CachedListPayload,
+    CACHE_TTL_SECONDS.CREATOR_DASHBOARD,
+  );
 
   return res.status(200).json({
     success: true,
@@ -396,13 +422,14 @@ export const getPhotosByCreator = asyncHandler(async (req: Request<CreatorPhotos
  * Returns top trending tags from published photos.
  */
 export const getTrendingTags = asyncHandler(async (_req: Request, res: Response) => {
-  const cacheKey = 'photos:trending-tags';
+  const cacheKey = CACHE_KEY_FACTORIES.trendingTags();
   const cached = await getCache<Array<{ tag: string; count: number }>>(cacheKey);
 
   if (cached) {
     return res.status(200).json({
       success: true,
       message: 'Trending tags fetched successfully',
+      fromCache: true,
       data: {
         tags: cached,
       },
@@ -429,13 +456,51 @@ export const getTrendingTags = asyncHandler(async (_req: Request, res: Response)
     },
   ]);
 
-  await setCache(cacheKey, tags, 300);
+  await setCache(cacheKey, tags, CACHE_TTL_SECONDS.TRENDING_TAGS);
 
   return res.status(200).json({
     success: true,
     message: 'Trending tags fetched successfully',
     data: {
       tags,
+    },
+  });
+});
+
+/**
+ * Returns top viewed published photo IDs for static generation.
+ */
+export const getTopViewedPhotos = asyncHandler(async (req: Request<unknown, unknown, unknown, { limit?: string }>, res: Response) => {
+  const limit = Math.min(parsePaginationValue(req.query.limit, 50), 50);
+  const cacheKey = CACHE_KEY_FACTORIES.topViewedPhotos(limit);
+  const cached = await getCache<Array<{ _id: string }>>(cacheKey);
+
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      message: 'Top viewed photos fetched successfully',
+      fromCache: true,
+      data: {
+        photos: cached,
+      },
+    });
+  }
+
+  const photos = await Photo.find({ isPublished: true })
+    .select('_id')
+    .sort({ viewsCount: -1, createdAt: -1 })
+    .limit(limit)
+    .lean();
+
+  const payload = photos.map((photo) => ({ _id: String(photo._id) }));
+
+  await setCache(cacheKey, payload, CACHE_TTL_SECONDS.TOP_VIEWED);
+
+  return res.status(200).json({
+    success: true,
+    message: 'Top viewed photos fetched successfully',
+    data: {
+      photos: payload,
     },
   });
 });
@@ -464,7 +529,7 @@ export const likePhoto = asyncHandler(async (req: Request<PhotoIdParams>, res: R
   }
 
   const updated = await Photo.findById(req.params.id).select('likesCount').lean();
-  await invalidatePhotoCache(req.params.id);
+  await cacheService.invalidatePhotoInteractions(req.params.id);
 
   return res.status(200).json({
     success: true,
@@ -493,7 +558,7 @@ export const unlikePhoto = asyncHandler(async (req: Request<PhotoIdParams>, res:
   await Like.findOneAndDelete({ user: req.user.id, photo: req.params.id });
 
   const updated = await Photo.findById(req.params.id).select('likesCount').lean();
-  await invalidatePhotoCache(req.params.id);
+  await cacheService.invalidatePhotoInteractions(req.params.id);
 
   return res.status(200).json({
     success: true,
@@ -572,7 +637,12 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
 
     const populatedPhoto = await Photo.findById(photo._id).populate('creator', 'username email role avatar');
 
-    await invalidatePhotoCache(String(photo._id));
+    await Promise.all([
+      cacheService.invalidatePhotoDetailAndLists(String(photo._id)),
+      cacheService.invalidateTrendingTags(),
+      cacheService.invalidateCreatorDashboard(req.user.id),
+      cacheService.invalidateAdminCaches(),
+    ]);
 
     return res.status(201).json({
       success: true,
@@ -640,7 +710,12 @@ export const updatePhoto = asyncHandler(async (req: Request<{ id: string }, unkn
   await photo.save();
 
   const populatedPhoto = await Photo.findById(photo._id).populate('creator', 'username email role avatar');
-  await invalidatePhotoCache(String(photo._id));
+  await Promise.all([
+    cacheService.invalidatePhotoDetailAndLists(String(photo._id)),
+    cacheService.invalidateTrendingTags(),
+    cacheService.invalidateCreatorDashboard(req.user.id),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,
@@ -675,7 +750,12 @@ export const deletePhoto = asyncHandler(async (req: Request<{ id: string }>, res
   ]);
 
   await photo.deleteOne();
-  await invalidatePhotoCache(String(photo._id));
+  await Promise.all([
+    cacheService.invalidatePhotoDetailAndLists(String(photo._id)),
+    cacheService.invalidateTrendingTags(),
+    cacheService.invalidateCreatorDashboard(req.user.id),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,

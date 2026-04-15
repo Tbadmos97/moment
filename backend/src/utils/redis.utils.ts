@@ -19,7 +19,51 @@ const redis = createRedisClient();
 export const CACHE_KEYS = {
   PHOTOS_LIST: 'photos:list',
   PHOTO_DETAIL: 'photos:detail',
+  CREATOR_PHOTOS: 'photos:creator',
+  TRENDING_TAGS: 'photos:trending-tags',
+  TOP_VIEWED: 'photos:top-viewed',
+  COMMENTS: 'photos:comments',
+  RATING_SUMMARY: 'photos:rating',
   USER_PROFILE: 'user:profile',
+  USERNAME_CHECK: 'users:username-check',
+  ADMIN_OVERVIEW: 'admin:overview',
+  ADMIN_USERS: 'admin:users',
+  ADMIN_PHOTOS: 'admin:photos',
+  ADMIN_COMMENTS: 'admin:comments',
+} as const;
+
+export const CACHE_TTL_SECONDS = {
+  PHOTOS_LIST: 60,
+  PHOTO_DETAIL: 120,
+  TRENDING_TAGS: 300,
+  CREATOR_DASHBOARD: 120,
+  USER_PROFILE: 180,
+  COMMENTS: 30,
+  RATING_SUMMARY: 60,
+  TOP_VIEWED: 120,
+  USERNAME_CHECK: 180,
+  ADMIN_LIST: 60,
+} as const;
+
+export const CACHE_KEY_FACTORIES = {
+  photosList: (page: number, limit: number, sort: string, tag?: string, search?: string): string =>
+    `${CACHE_KEYS.PHOTOS_LIST}:${page}:${limit}:${sort}:${tag ?? ''}:${search ?? ''}`,
+  photoDetail: (photoId: string): string => `${CACHE_KEYS.PHOTO_DETAIL}:${photoId}`,
+  creatorPhotos: (creatorId: string, page: number, limit: number): string =>
+    `${CACHE_KEYS.CREATOR_PHOTOS}:${creatorId}:${page}:${limit}`,
+  trendingTags: (): string => CACHE_KEYS.TRENDING_TAGS,
+  topViewedPhotos: (limit: number): string => `${CACHE_KEYS.TOP_VIEWED}:${limit}`,
+  comments: (photoId: string, page: number, limit: number): string => `${CACHE_KEYS.COMMENTS}:${photoId}:${page}:${limit}`,
+  ratingSummary: (photoId: string): string => `${CACHE_KEYS.RATING_SUMMARY}:${photoId}`,
+  userProfile: (userId: string): string => `${CACHE_KEYS.USER_PROFILE}:${userId}`,
+  usernameCheck: (username: string): string => `${CACHE_KEYS.USERNAME_CHECK}:${username}`,
+  adminOverview: (): string => CACHE_KEYS.ADMIN_OVERVIEW,
+  adminUsers: (page: number, limit: number, role: string, search?: string): string =>
+    `${CACHE_KEYS.ADMIN_USERS}:${page}:${limit}:${role}:${search ?? ''}`,
+  adminPhotos: (page: number, limit: number, status: string, search?: string): string =>
+    `${CACHE_KEYS.ADMIN_PHOTOS}:${page}:${limit}:${status}:${search ?? ''}`,
+  adminComments: (page: number, limit: number, search?: string): string =>
+    `${CACHE_KEYS.ADMIN_COMMENTS}:${page}:${limit}:${search ?? ''}`,
 } as const;
 
 /**

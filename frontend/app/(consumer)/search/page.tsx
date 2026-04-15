@@ -4,7 +4,8 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import Masonry from 'react-masonry-css';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useInView } from 'react-intersection-observer';
 
 import PhotoCard, { PhotoCardSkeleton } from '@/components/consumer/PhotoCard';
 import { fetchPhotos, likePhotoRequest, unlikePhotoRequest } from '@/lib/consumer-api';
@@ -36,6 +37,8 @@ export default function SearchPage(): JSX.Element {
   const [submittedTerm, setSubmittedTerm] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const queryClient = useQueryClient();
+  const pendingFetchRef = useRef(false);
+  const { ref: sentinelRef, inView } = useInView({ rootMargin: '320px' });
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -66,6 +69,20 @@ export default function SearchPage(): JSX.Element {
   });
 
   const photos = useMemo(() => searchQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [searchQuery.data?.pages]);
+  const hasNextPage = searchQuery.hasNextPage;
+  const isFetchingNextPage = searchQuery.isFetchingNextPage;
+  const fetchNextPage = searchQuery.fetchNextPage;
+
+  useEffect(() => {
+    if (!inView || !hasNextPage || isFetchingNextPage || pendingFetchRef.current) {
+      return;
+    }
+
+    pendingFetchRef.current = true;
+    void fetchNextPage().finally(() => {
+      pendingFetchRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, inView, isFetchingNextPage]);
 
   const persistRecent = (value: string): void => {
     const normalized = value.trim();
@@ -162,6 +179,7 @@ export default function SearchPage(): JSX.Element {
       ) : null}
 
       <div className="pt-6 text-center">
+        <div ref={sentinelRef} className="h-px w-full" />
         {searchQuery.hasNextPage ? (
           <button
             type="button"

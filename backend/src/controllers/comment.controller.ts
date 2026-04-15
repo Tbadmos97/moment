@@ -3,9 +3,15 @@ import { Types } from 'mongoose';
 
 import Comment from '../models/Comment.model';
 import Photo from '../models/Photo.model';
+import cacheService from '../services/cache.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
-import { deleteCachePattern, getCache, setCache } from '../utils/redis.utils';
+import {
+  CACHE_KEY_FACTORIES,
+  CACHE_TTL_SECONDS,
+  getCache,
+  setCache,
+} from '../utils/redis.utils';
 
 type PhotoCommentsParams = {
   photoId: string;
@@ -59,10 +65,10 @@ const parsePaginationValue = (value: string | undefined, fallback: number): numb
 };
 
 const commentsCacheKey = (photoId: string, page: number, limit: number): string => {
-  return `photos:comments:${photoId}:${page}:${limit}`;
+  return CACHE_KEY_FACTORIES.comments(photoId, page, limit);
 };
 
-const ratingCacheKey = (photoId: string): string => `photos:rating:${photoId}`;
+const ratingCacheKey = (photoId: string): string => CACHE_KEY_FACTORIES.ratingSummary(photoId);
 
 const normalizeAverage = (value?: number | null): number => {
   if (!value || Number.isNaN(value)) {
@@ -132,18 +138,9 @@ const getRatingSummary = async (photoId: string): Promise<RatingSummaryPayload> 
     },
   };
 
-  await setCache(ratingCacheKey(photoId), payload, 60);
+  await setCache(ratingCacheKey(photoId), payload, CACHE_TTL_SECONDS.RATING_SUMMARY);
 
   return payload;
-};
-
-const invalidateCommentCaches = async (photoId: string): Promise<void> => {
-  await Promise.allSettled([
-    deleteCachePattern(`photos:detail:${photoId}*`),
-    deleteCachePattern('photos:list:*'),
-    deleteCachePattern(`photos:comments:${photoId}:*`),
-    deleteCachePattern(`photos:rating:${photoId}*`),
-  ]);
 };
 
 /**
@@ -202,7 +199,10 @@ export const createComment = asyncHandler(async (req: Request<PhotoCommentsParam
 
   const populatedComment = await Comment.findById(comment._id).populate('author', 'username avatar').lean();
 
-  await invalidateCommentCaches(req.params.photoId);
+  await Promise.all([
+    cacheService.invalidatePhotoInteractions(req.params.photoId),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(201).json({
     success: true,
@@ -246,6 +246,7 @@ export const getComments = asyncHandler(async (req: Request<PhotoCommentsParams,
     return res.status(200).json({
       success: true,
       message: 'Comments fetched successfully',
+      fromCache: true,
       data: {
         comments: cached.comments,
         page: cached.page,
@@ -287,7 +288,7 @@ export const getComments = asyncHandler(async (req: Request<PhotoCommentsParams,
       averageRating: ratingSummary.averageRating,
       totalRatings: ratingSummary.totalRatings,
     } satisfies CachedCommentsPayload,
-    30,
+    CACHE_TTL_SECONDS.COMMENTS,
   );
 
   let userHasRated = false;
@@ -356,7 +357,10 @@ export const deleteComment = asyncHandler(async (req: Request<CommentParams>, re
   }
 
   await Comment.findByIdAndDelete(req.params.id);
-  await invalidateCommentCaches(String(comment.photo));
+  await Promise.all([
+    cacheService.invalidatePhotoInteractions(String(comment.photo)),
+    cacheService.invalidateAdminCaches(),
+  ]);
 
   return res.status(200).json({
     success: true,

@@ -112,8 +112,6 @@ userSchema.virtual('photoCount', {
   count: true,
 });
 
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
 userSchema.index({ role: 1 });
 
 const User = model<IUser, UserModel>('User', userSchema);

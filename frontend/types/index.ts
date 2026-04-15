@@ -33,6 +33,8 @@ export interface Photo {
   viewsCount?: number;
   tags?: string[];
   isLiked?: boolean;
+  width?: number;
+  height?: number;
   createdAt: string;
   comments?: Comment[];
 }

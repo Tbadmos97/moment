@@ -3,6 +3,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Star, Trash2 } from 'lucide-react';
+import Image from 'next/image';
 import { useState } from 'react';
 
 import type { Comment } from '@/types';
@@ -83,7 +84,13 @@ export default function CommentItem({ comment, canDelete, onDelete }: CommentIte
         <div className="flex items-start gap-3">
           <div className="h-9 w-9 overflow-hidden rounded-full border border-border/80 bg-bg-card">
             {comment.author.avatar ? (
-              <img src={comment.author.avatar} alt={comment.author.username} className="h-full w-full object-cover" />
+              <Image
+                src={comment.author.avatar}
+                alt={comment.author.username}
+                width={36}
+                height={36}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs uppercase text-text-secondary">
                 {comment.author.username.slice(0, 2)}
