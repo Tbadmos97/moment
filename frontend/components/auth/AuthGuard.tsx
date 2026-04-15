@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { useAuthStore } from '@/store/authStore';
 
@@ -16,36 +16,43 @@ interface AuthGuardProps {
 export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX.Element {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, isAuthenticated, isLoading } = useAuthStore((state) => ({
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    isLoading: state.isLoading,
-  }));
+  const userRole = useAuthStore((state) => state.user?.role ?? null);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const lastRedirectRef = useRef<string | null>(null);
+  const allowRolesKey = useMemo(() => (allowRoles && allowRoles.length > 0 ? allowRoles.join(',') : ''), [allowRoles]);
 
   useEffect(() => {
     if (isLoading) {
       return;
     }
 
-    if (!isAuthenticated || !user) {
+    let targetPath: string | null = null;
+
+    if (!isAuthenticated || !userRole) {
       if (pathname !== '/') {
-        router.replace('/');
+        targetPath = '/';
       }
-      return;
-    }
-
-    if (!allowRoles || allowRoles.length === 0) {
-      return;
-    }
-
-    if (!allowRoles.includes(user.role)) {
-      const fallback = user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover';
+    } else if (allowRoles && allowRoles.length > 0 && !allowRoles.includes(userRole)) {
+      const fallback = userRole === 'creator' || userRole === 'admin' ? '/creator' : '/discover';
 
       if (pathname !== fallback) {
-        router.replace(fallback);
+        targetPath = fallback;
       }
     }
-  }, [allowRoles, isAuthenticated, isLoading, pathname, router, user]);
+
+    if (!targetPath) {
+      lastRedirectRef.current = null;
+      return;
+    }
+
+    if (lastRedirectRef.current === targetPath) {
+      return;
+    }
+
+    lastRedirectRef.current = targetPath;
+    router.replace(targetPath);
+  }, [allowRoles, allowRolesKey, isAuthenticated, isLoading, pathname, router, userRole]);
 
   if (isLoading) {
     return (
@@ -58,11 +65,11 @@ export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX
     );
   }
 
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !userRole) {
     return <></>;
   }
 
-  if (allowRoles && allowRoles.length > 0 && !allowRoles.includes(user.role)) {
+  if (allowRoles && allowRoles.length > 0 && !allowRoles.includes(userRole)) {
     return <></>;
   }
 

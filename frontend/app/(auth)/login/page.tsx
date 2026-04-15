@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
@@ -29,6 +29,7 @@ export default function LoginPage(): JSX.Element {
 
   const [showPassword, setShowPassword] = useState(false);
   const [shakeForm, setShakeForm] = useState(false);
+  const hasRedirectedRef = useRef(false);
 
   const {
     register,
@@ -46,8 +47,9 @@ export default function LoginPage(): JSX.Element {
   const onSubmit = async (values: LoginFormValues): Promise<void> => {
     try {
       await login({ email: values.email, password: values.password });
-      const role = useAuthStore.getState().user?.role ?? user?.role;
+      const role = useAuthStore.getState().user?.role;
       toast.success(`Welcome back (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      hasRedirectedRef.current = true;
       router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
     } catch {
       setShakeForm(true);
@@ -57,10 +59,11 @@ export default function LoginPage(): JSX.Element {
   };
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !user) {
+    if (hasRedirectedRef.current || isLoading || !isAuthenticated || !user) {
       return;
     }
 
+    hasRedirectedRef.current = true;
     router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
   }, [isAuthenticated, isLoading, router, user]);
 

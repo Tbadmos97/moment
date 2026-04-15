@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
@@ -72,6 +72,7 @@ export default function RegisterPage(): JSX.Element {
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const hasRedirectedRef = useRef(false);
 
   const {
     register,
@@ -136,6 +137,7 @@ export default function RegisterPage(): JSX.Element {
       });
       const role = useAuthStore.getState().user?.role;
       toast.success(`Account created (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      hasRedirectedRef.current = true;
       router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
     } catch {
       toast.error('Registration failed. Please try again.');
@@ -143,10 +145,11 @@ export default function RegisterPage(): JSX.Element {
   };
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !user) {
+    if (hasRedirectedRef.current || isLoading || !isAuthenticated || !user) {
       return;
     }
 
+    hasRedirectedRef.current = true;
     router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
   }, [isAuthenticated, isLoading, router, user]);
 
