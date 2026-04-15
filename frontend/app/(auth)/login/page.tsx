@@ -48,9 +48,9 @@ export default function LoginPage(): JSX.Element {
     try {
       await login({ email: values.email, password: values.password });
       const role = useAuthStore.getState().user?.role;
-      toast.success(`Welcome back (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      toast.success(`Welcome back (${role === 'admin' ? 'admin' : role === 'creator' ? 'creator' : 'consumer'})`);
       hasRedirectedRef.current = true;
-      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
+      router.replace(role === 'admin' ? '/admin' : role === 'creator' ? '/creator' : '/discover');
     } catch {
       setShakeForm(true);
       window.setTimeout(() => setShakeForm(false), 420);
@@ -64,7 +64,7 @@ export default function LoginPage(): JSX.Element {
     }
 
     hasRedirectedRef.current = true;
-    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
+    router.replace(user.role === 'admin' ? '/admin' : user.role === 'creator' ? '/creator' : '/discover');
   }, [isAuthenticated, isLoading, router, user]);
 
   return (

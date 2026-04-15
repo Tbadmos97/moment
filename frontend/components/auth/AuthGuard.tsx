@@ -34,7 +34,7 @@ export default function AuthGuard({ children, allowRoles }: AuthGuardProps): JSX
         targetPath = '/';
       }
     } else if (allowRoles && allowRoles.length > 0 && !allowRoles.includes(userRole)) {
-      const fallback = userRole === 'creator' || userRole === 'admin' ? '/creator' : '/discover';
+      const fallback = userRole === 'admin' ? '/admin' : userRole === 'creator' ? '/creator' : '/discover';
 
       if (pathname !== fallback) {
         targetPath = fallback;

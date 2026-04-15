@@ -53,6 +53,25 @@ export const registerUserValidation: ValidationChain[] = [
   body('avatar').optional().isURL().withMessage('Avatar must be a valid URL'),
 ];
 
+export const setupAdminValidation: ValidationChain[] = [
+  body('username')
+    .trim()
+    .isLength({ min: 3, max: 30 })
+    .withMessage('Username must be between 3 and 30 characters')
+    .matches(/^[a-z0-9_]+$/)
+    .withMessage('Username can contain lowercase letters, numbers, and underscores only'),
+  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('password')
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be between 8 and 128 characters')
+    .matches(/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/)
+    .withMessage('Password must include one uppercase letter, one number, and one special character'),
+  body('adminSetupSecret')
+    .trim()
+    .isLength({ min: 6, max: 128 })
+    .withMessage('adminSetupSecret must be between 6 and 128 characters'),
+];
+
 export const loginUserValidation: ValidationChain[] = [
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required'),

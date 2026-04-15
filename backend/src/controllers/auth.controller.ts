@@ -36,6 +36,13 @@ interface BecomeCreatorBody {
   creatorAccessCode: string;
 }
 
+interface SetupAdminBody {
+  username: string;
+  email: string;
+  password: string;
+  adminSetupSecret: string;
+}
+
 const createError = (message: string, statusCode: number): AppError => {
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
@@ -349,6 +356,66 @@ export const adminCreateCreator = asyncHandler(async (req: Request<unknown, unkn
     message: 'Creator account created',
     data: {
       user: toPublicUser(user),
+    },
+  });
+});
+
+/**
+ * Creates the very first admin account using ADMIN_SETUP_SECRET.
+ */
+export const setupInitialAdmin = asyncHandler(async (req: Request<unknown, unknown, SetupAdminBody>, res: Response) => {
+  const { username, email, password, adminSetupSecret } = req.body;
+
+  const configuredSecret = process.env.ADMIN_SETUP_SECRET?.trim();
+
+  if (!configuredSecret) {
+    throw createError('Admin setup is currently disabled', 403);
+  }
+
+  if (!adminSetupSecret || adminSetupSecret.trim() !== configuredSecret) {
+    throw createError('Invalid admin setup secret', 403);
+  }
+
+  const adminExists = await User.exists({ role: 'admin' });
+
+  if (adminExists) {
+    throw createError('Initial admin has already been configured', 409);
+  }
+
+  const normalizedUsername = username.trim().toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const [usernameExists, emailExists] = await Promise.all([
+    User.exists({ username: normalizedUsername }),
+    User.exists({ email: normalizedEmail }),
+  ]);
+
+  if (usernameExists) {
+    throw createError('Username is already taken', 409);
+  }
+
+  if (emailExists) {
+    throw createError('Email is already registered', 409);
+  }
+
+  const user = await User.create({
+    username: normalizedUsername,
+    email: normalizedEmail,
+    password,
+    role: 'admin',
+  });
+
+  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
+  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  await user.save();
+
+  return res.status(201).json({
+    success: true,
+    message: 'Initial admin created successfully',
+    data: {
+      user: toPublicUser(user),
+      accessToken,
+      refreshToken,
     },
   });
 });

@@ -8,12 +8,14 @@ import {
   logout,
   refreshToken,
   register,
+  setupInitialAdmin,
 } from '../controllers/auth.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { authLimiter } from '../middleware/rateLimit.middleware';
 import {
   loginUserValidation,
   becomeCreatorValidation,
+  setupAdminValidation,
   logoutValidation,
   refreshTokenValidation,
   registerUserValidation,
@@ -23,6 +25,7 @@ import {
 const router = Router();
 
 router.post('/register', authLimiter, registerUserValidation, validateRequest, register);
+router.post('/setup-admin', authLimiter, setupAdminValidation, validateRequest, setupInitialAdmin);
 router.post('/login', authLimiter, loginUserValidation, validateRequest, login);
 router.post('/refresh', refreshTokenValidation, validateRequest, refreshToken);
 router.post('/logout', authenticate, logoutValidation, validateRequest, logout);

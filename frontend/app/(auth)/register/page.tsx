@@ -136,9 +136,9 @@ export default function RegisterPage(): JSX.Element {
         creatorAccessCode: values.accountType === 'creator' ? values.creatorAccessCode?.trim() : undefined,
       });
       const role = useAuthStore.getState().user?.role;
-      toast.success(`Account created (${role === 'creator' || role === 'admin' ? 'creator' : 'consumer'})`);
+      toast.success(`Account created (${role === 'admin' ? 'admin' : role === 'creator' ? 'creator' : 'consumer'})`);
       hasRedirectedRef.current = true;
-      router.replace(role === 'creator' || role === 'admin' ? '/creator' : '/discover');
+      router.replace(role === 'admin' ? '/admin' : role === 'creator' ? '/creator' : '/discover');
     } catch {
       toast.error('Registration failed. Please try again.');
     }
@@ -150,7 +150,7 @@ export default function RegisterPage(): JSX.Element {
     }
 
     hasRedirectedRef.current = true;
-    router.replace(user.role === 'creator' || user.role === 'admin' ? '/creator' : '/discover');
+    router.replace(user.role === 'admin' ? '/admin' : user.role === 'creator' ? '/creator' : '/discover');
   }, [isAuthenticated, isLoading, router, user]);
 
   return (
