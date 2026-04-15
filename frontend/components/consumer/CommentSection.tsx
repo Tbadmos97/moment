@@ -2,9 +2,8 @@
 
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Star } from 'lucide-react';
-import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useInView } from 'react-intersection-observer';
 import toast from 'react-hot-toast';
 
 import CommentItem from '@/components/consumer/CommentItem';
@@ -41,7 +40,6 @@ const TEXTAREA_MAX_CHARS = 500;
 export default function CommentSection({ photoId, photoCreatorId, initialComments }: CommentSectionProps): JSX.Element {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
-  const { ref, inView } = useInView({ threshold: 0, rootMargin: '140px' });
 
   const [draft, setDraft] = useState('');
   const [selectedRating, setSelectedRating] = useState<number | undefined>();
@@ -72,20 +70,6 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
       pageParams: [1],
     },
   });
-
-  const {
-    hasNextPage: commentsHasNextPage,
-    isFetchingNextPage: commentsIsFetchingNextPage,
-    fetchNextPage: fetchNextCommentsPage,
-  } = commentsQuery;
-
-  useEffect(() => {
-    if (!inView || !commentsHasNextPage || commentsIsFetchingNextPage) {
-      return;
-    }
-
-    void fetchNextCommentsPage();
-  }, [inView, commentsHasNextPage, commentsIsFetchingNextPage, fetchNextCommentsPage]);
 
   const comments = useMemo(() => commentsQuery.data?.pages.flatMap((page) => page.comments) ?? [], [commentsQuery.data?.pages]);
   const firstPage = commentsQuery.data?.pages[0];
@@ -356,8 +340,15 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
         </AnimatePresence>
 
         {commentsQuery.hasNextPage ? (
-          <div ref={ref} className="rounded-xl border border-dashed border-border px-4 py-3 text-center text-xs text-text-muted">
-            {commentsQuery.isFetchingNextPage ? 'Loading more comments...' : 'Scroll to load more comments'}
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={() => void commentsQuery.fetchNextPage()}
+              disabled={commentsQuery.isFetchingNextPage}
+              className="rounded-full border border-border bg-bg-card px-5 py-2 text-xs uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold disabled:opacity-60"
+            >
+              {commentsQuery.isFetchingNextPage ? 'Loading more comments...' : 'Load more comments'}
+            </button>
           </div>
         ) : null}
       </section>

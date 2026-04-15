@@ -3,8 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Masonry from 'react-masonry-css';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInView } from 'react-intersection-observer';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import PhotoCard, { PhotoCardSkeleton } from '@/components/consumer/PhotoCard';
@@ -24,8 +23,6 @@ export default function ConsumerFeed(): JSX.Element {
   const queryClient = useQueryClient();
   const [sort, setSort] = useState<FeedSort>('latest');
   const [activeTag, setActiveTag] = useState<string | undefined>();
-  const { ref, inView } = useInView({ rootMargin: '400px' });
-  const pendingFetchRef = useRef(false);
 
   const trendingTagsQuery = useQuery({
     queryKey: ['trending-tags'],
@@ -44,23 +41,6 @@ export default function ConsumerFeed(): JSX.Element {
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
   });
-
-  const {
-    hasNextPage: feedHasNextPage,
-    isFetchingNextPage: feedIsFetchingNextPage,
-    fetchNextPage: fetchNextFeedPage,
-  } = photosQuery;
-
-  useEffect(() => {
-    if (!inView || !feedHasNextPage || feedIsFetchingNextPage || pendingFetchRef.current) {
-      return;
-    }
-
-    pendingFetchRef.current = true;
-    void fetchNextFeedPage().finally(() => {
-      pendingFetchRef.current = false;
-    });
-  }, [inView, feedHasNextPage, feedIsFetchingNextPage, fetchNextFeedPage]);
 
   const photos = useMemo(() => photosQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [photosQuery.data?.pages]);
 
@@ -224,14 +204,19 @@ export default function ConsumerFeed(): JSX.Element {
         </div>
       ) : null}
 
-      <div ref={ref} className="pt-6 text-center text-xs uppercase tracking-[0.16em] text-text-muted">
-        {photosQuery.isFetchingNextPage
-          ? 'Loading more moments...'
-          : photosQuery.hasNextPage
-            ? 'Scroll for more'
-            : photos.length > 0
-              ? 'You reached the end'
-              : ''}
+      <div className="pt-6 text-center">
+        {photosQuery.hasNextPage ? (
+          <button
+            type="button"
+            onClick={() => void photosQuery.fetchNextPage()}
+            disabled={photosQuery.isFetchingNextPage}
+            className="rounded-full border border-border bg-bg-card px-5 py-2 text-xs uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold disabled:opacity-60"
+          >
+            {photosQuery.isFetchingNextPage ? 'Loading more moments...' : 'Load more'}
+          </button>
+        ) : photos.length > 0 ? (
+          <p className="text-xs uppercase tracking-[0.16em] text-text-muted">You reached the end</p>
+        ) : null}
       </div>
     </main>
   );

@@ -4,8 +4,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import Masonry from 'react-masonry-css';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useInView } from 'react-intersection-observer';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import PhotoCard, { PhotoCardSkeleton } from '@/components/consumer/PhotoCard';
 import { fetchPhotos, likePhotoRequest, unlikePhotoRequest } from '@/lib/consumer-api';
@@ -36,8 +35,6 @@ export default function SearchPage(): JSX.Element {
   const [term, setTerm] = useState(initialQuery);
   const [submittedTerm, setSubmittedTerm] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const { ref, inView } = useInView({ rootMargin: '400px' });
-  const pendingFetchRef = useRef(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -67,23 +64,6 @@ export default function SearchPage(): JSX.Element {
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
   });
-
-  const {
-    hasNextPage: searchHasNextPage,
-    isFetchingNextPage: searchIsFetchingNextPage,
-    fetchNextPage: fetchNextSearchPage,
-  } = searchQuery;
-
-  useEffect(() => {
-    if (!inView || !searchHasNextPage || searchIsFetchingNextPage || pendingFetchRef.current) {
-      return;
-    }
-
-    pendingFetchRef.current = true;
-    void fetchNextSearchPage().finally(() => {
-      pendingFetchRef.current = false;
-    });
-  }, [inView, searchHasNextPage, searchIsFetchingNextPage, fetchNextSearchPage]);
 
   const photos = useMemo(() => searchQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [searchQuery.data?.pages]);
 
@@ -181,8 +161,17 @@ export default function SearchPage(): JSX.Element {
         </div>
       ) : null}
 
-      <div ref={ref} className="pt-6 text-center text-xs uppercase tracking-[0.16em] text-text-muted">
-        {searchQuery.isFetchingNextPage ? 'Loading more results...' : searchQuery.hasNextPage ? 'Scroll for more' : ''}
+      <div className="pt-6 text-center">
+        {searchQuery.hasNextPage ? (
+          <button
+            type="button"
+            onClick={() => void searchQuery.fetchNextPage()}
+            disabled={searchQuery.isFetchingNextPage}
+            className="rounded-full border border-border bg-bg-card px-5 py-2 text-xs uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold disabled:opacity-60"
+          >
+            {searchQuery.isFetchingNextPage ? 'Loading more results...' : 'Load more'}
+          </button>
+        ) : null}
       </div>
     </main>
   );
