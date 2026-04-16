@@ -21,9 +21,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const user = useAuthStore((state) => state.user);
 
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary md:grid md:grid-cols-[280px_1fr]">
-      <aside className="hidden border-r border-border bg-bg-secondary/60 px-6 py-7 md:flex md:flex-col">
-        <Link href="/admin" className="text-3xl font-display tracking-wide text-text-primary">
+    <div className="min-h-screen app-shell-bg bg-bg-primary text-text-primary page-enter md:grid md:grid-cols-[280px_1fr]">
+      <aside className="hidden border-r border-border/80 bg-bg-secondary/55 px-6 py-7 backdrop-blur md:flex md:flex-col">
+        <Link href="/admin" className="brand-wordmark text-3xl">
           MOMENT
         </Link>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-accent-gold">Admin Console</p>
@@ -38,10 +38,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'group relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition',
+                  'nav-item group relative flex items-center gap-3 px-4 py-3 text-sm',
                   isActive
-                    ? 'bg-bg-card text-text-primary'
-                    : 'text-text-secondary hover:bg-bg-card hover:text-text-primary',
+                    ? 'nav-item-active text-text-primary'
+                    : 'text-text-secondary',
                 )}
               >
                 <Icon size={16} />
@@ -52,14 +52,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <div className="mt-auto rounded-2xl border border-border bg-bg-card p-4">
+        <div className="glass-panel mt-auto p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Signed in as</p>
           <p className="mt-1 text-sm font-medium">{user?.username ?? 'Admin'}</p>
           <p className="text-xs text-text-secondary">{user?.email ?? 'admin@moment.app'}</p>
 
           <button
             type="button"
-            className="mt-3 w-full rounded-xl border border-border bg-bg-hover px-3 py-2 text-xs uppercase tracking-[0.14em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+            className="ui-btn-secondary mt-3 w-full px-3 py-2 text-xs uppercase tracking-[0.14em]"
             onClick={async () => {
               await logout();
               router.replace('/register');

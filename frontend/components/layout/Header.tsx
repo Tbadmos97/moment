@@ -55,19 +55,19 @@ export default function Header(): JSX.Element {
 
   const activeSearchValue = searchParams.get('q') ?? '';
 
-  const blurStyle = scrolled || pathname !== '/' ? 'bg-black/45 backdrop-blur-xl border-border/80' : 'bg-transparent border-transparent';
+  const blurStyle = scrolled || pathname !== '/' ? 'bg-black/45 backdrop-blur-xl border-border/80 shadow-[0_10px_34px_rgba(0,0,0,0.35)]' : 'bg-transparent border-transparent';
 
   return (
     <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${blurStyle}`}>
       <div className="mx-auto flex w-full max-w-[1400px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="text-2xl font-display tracking-[0.2em] text-accent-gold">
+        <Link href="/" className="brand-wordmark text-2xl">
           MOMENT
         </Link>
 
         <motion.form
           layoutId="header-search"
           onSubmit={onSubmit}
-          className="relative hidden flex-1 items-center rounded-full border border-border/80 bg-black/40 px-4 py-2 md:flex"
+          className="relative hidden flex-1 items-center rounded-full border border-border/80 bg-black/45 px-4 py-2 md:flex"
           whileFocus={{ scale: 1.01 }}
         >
           <Search size={17} className="text-text-secondary" />
@@ -94,10 +94,10 @@ export default function Header(): JSX.Element {
         </motion.form>
 
         <div className="ml-auto hidden items-center gap-2 md:flex">
-          <button className="rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary transition hover:text-accent-gold" type="button" aria-label="Notifications">
+          <button className="ui-btn-ghost rounded-full p-2" type="button" aria-label="Notifications">
             <Bell size={18} />
           </button>
-          <Link href={profileHref} className="rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary transition hover:text-accent-gold" aria-label="Profile">
+          <Link href={profileHref} className="ui-btn-ghost rounded-full p-2" aria-label="Profile">
             <User size={18} />
           </Link>
           <button
@@ -105,7 +105,7 @@ export default function Header(): JSX.Element {
             onClick={() => {
               void handleLogout();
             }}
-            className="rounded-full border border-border/70 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.14em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+            className="ui-btn-secondary px-4 py-2 text-xs uppercase tracking-[0.14em]"
           >
             Logout
           </button>
@@ -113,7 +113,7 @@ export default function Header(): JSX.Element {
 
         <button
           type="button"
-          className="ml-auto rounded-full border border-border/70 bg-black/40 p-2 text-text-secondary md:hidden"
+          className="ui-btn-ghost ml-auto rounded-full p-2 md:hidden"
           onClick={() => setDrawerOpen(true)}
           aria-label="Open menu"
         >
@@ -137,11 +137,11 @@ export default function Header(): JSX.Element {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.35 }}
-              className="fixed right-0 top-0 z-50 flex h-full w-[88%] max-w-sm flex-col gap-6 border-l border-border bg-bg-secondary p-6"
+              className="fixed right-0 top-0 z-50 flex h-full w-[88%] max-w-sm flex-col gap-6 border-l border-border bg-bg-secondary/95 p-6 backdrop-blur"
             >
               <div className="flex items-center justify-between">
-                <p className="font-display text-2xl text-accent-gold">MOMENT</p>
-                <button type="button" onClick={() => setDrawerOpen(false)} className="rounded-full border border-border p-2 text-text-secondary">
+                <p className="brand-wordmark text-2xl">MOMENT</p>
+                <button type="button" onClick={() => setDrawerOpen(false)} className="ui-btn-ghost rounded-full p-2">
                   <X size={18} />
                 </button>
               </div>
@@ -174,7 +174,7 @@ export default function Header(): JSX.Element {
                 onClick={() => {
                   void handleLogout();
                 }}
-                className="mt-auto rounded-full border border-border bg-black/40 px-4 py-2 text-sm text-text-secondary"
+                className="ui-btn-secondary mt-auto px-4 py-2 text-sm"
               >
                 Logout
               </button>

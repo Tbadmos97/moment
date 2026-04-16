@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }):
   const pathname = usePathname();
 
   return (
-    <main className="grid min-h-screen bg-bg-primary md:grid-cols-[1.1fr_0.9fr]">
+    <main className="grid min-h-screen bg-bg-primary page-enter md:grid-cols-[1.1fr_0.9fr]">
       <section className="relative hidden overflow-hidden md:block">
         <AnimatePresence mode="wait">
           <motion.div
@@ -34,7 +34,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }):
         <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/65 to-black/80" />
         <div className="relative z-10 flex h-full flex-col justify-between p-12 text-text-primary">
           <div>
-            <p className="text-6xl font-display tracking-wide">MOMENT</p>
+            <p className="brand-wordmark text-6xl">MOMENT</p>
             <p className="mt-4 max-w-md text-lg text-text-secondary">Capture the moment. Share the story.</p>
           </div>
           <p className="text-xs uppercase tracking-[0.22em] text-accent-gold">COM769 • Scalable Advanced Software Solutions</p>
@@ -43,12 +43,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }):
 
       <section className="flex items-center justify-center px-6 py-10 sm:px-10">
         <div className={`w-full ${pathname.includes('/register') ? 'max-w-xl' : 'max-w-lg'}`}>
-          <Link href="/" className="mb-8 inline-flex text-3xl font-display tracking-wide text-text-primary md:hidden">
+          <Link href="/" className="brand-wordmark mb-8 inline-flex text-3xl md:hidden">
             MOMENT
           </Link>
           <motion.div
             layoutId="auth-card"
-            className="rounded-3xl border border-border bg-bg-secondary/70 p-8 sm:p-9 shadow-[0_10px_50px_rgba(0,0,0,0.45)] backdrop-blur"
+            className="glass-panel p-8 sm:p-9"
           >
             {children}
           </motion.div>
