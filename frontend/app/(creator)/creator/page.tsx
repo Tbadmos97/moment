@@ -7,15 +7,18 @@ import {
   ChartColumn,
   CheckCircle2,
   Clock3,
+  Download,
   Heart,
   MessageCircle,
+  Printer,
   Sparkles,
   TrendingUp,
   Upload,
   Video,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { fetchCreatorPhotos } from '@/lib/consumer-api';
 import { useAuthStore } from '@/store/authStore';
@@ -25,6 +28,21 @@ type DashboardMetric = {
   value: string;
   hint: string;
   icon: JSX.Element;
+};
+
+type RangeKey = '30d' | '90d' | '180d' | 'all';
+
+const RANGE_OPTIONS: Array<{ key: RangeKey; label: string }> = [
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
+  { key: '180d', label: '180D' },
+  { key: 'all', label: 'All' },
+];
+
+const RANGE_TO_DAYS: Record<Exclude<RangeKey, 'all'>, number> = {
+  '30d': 30,
+  '90d': 90,
+  '180d': 180,
 };
 
 const formatCompact = (value: number): string =>
@@ -54,20 +72,88 @@ const getMonthLabel = (date: Date): string =>
     month: 'short',
   }).format(date);
 
+const isRangeKey = (value: string | null): value is RangeKey => {
+  return value === '30d' || value === '90d' || value === '180d' || value === 'all';
+};
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
 export default function CreatorDashboardPage(): JSX.Element {
   const user = useAuthStore((state) => state.user);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [selectedRange, setSelectedRange] = useState<RangeKey>('90d');
 
   const photosQuery = useQuery({
     queryKey: ['creator-dashboard-photos', user?._id],
-    queryFn: () => fetchCreatorPhotos(user?._id ?? '', 1, 60),
+    queryFn: () => fetchCreatorPhotos(user?._id ?? '', 1, 200),
     enabled: Boolean(user?._id),
   });
 
   const photos = useMemo(() => photosQuery.data?.photos ?? [], [photosQuery.data?.photos]);
 
+  useEffect(() => {
+    const rangeFromUrl = searchParams.get('range');
+    if (isRangeKey(rangeFromUrl)) {
+      setSelectedRange(rangeFromUrl);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('creator-dashboard-range', rangeFromUrl);
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem('creator-dashboard-range');
+      if (isRangeKey(stored)) {
+        setSelectedRange(stored);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('range', stored);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+    }
+  }, [pathname, router, searchParams]);
+
+  const handleRangeChange = useCallback(
+    (nextRange: RangeKey) => {
+      setSelectedRange(nextRange);
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('creator-dashboard-range', nextRange);
+      }
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('range', nextRange);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const scopedPhotos = useMemo(() => {
+    if (selectedRange === 'all') {
+      return photos;
+    }
+
+    const days = RANGE_TO_DAYS[selectedRange];
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    return photos.filter((photo) => new Date(photo.createdAt).getTime() >= cutoff);
+  }, [photos, selectedRange]);
+
+  const rangeLabel = useMemo(() => {
+    const option = RANGE_OPTIONS.find((item) => item.key === selectedRange);
+    return option?.label ?? '90D';
+  }, [selectedRange]);
+
   const metrics = useMemo<DashboardMetric[]>(() => {
-    const published = photos.filter((photo) => photo.isPublished);
-    const drafts = photos.length - published.length;
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
+    const drafts = scopedPhotos.length - published.length;
     const likes = published.reduce((acc, photo) => acc + (photo.likesCount ?? 0), 0);
     const comments = published.reduce((acc, photo) => acc + (photo.commentsCount ?? 0), 0);
     const engagementRate = published.length > 0 ? Math.round(((likes + comments) / published.length) * 10) / 10 : 0;
@@ -98,19 +184,19 @@ export default function CreatorDashboardPage(): JSX.Element {
         icon: <ChartColumn size={16} />,
       },
     ];
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const topPhotos = useMemo(() => {
-    return [...photos]
+    return [...scopedPhotos]
       .filter((photo) => photo.isPublished)
       .sort((a, b) => (b.likesCount + b.commentsCount) - (a.likesCount + a.commentsCount))
       .slice(0, 3);
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const priorities = useMemo(() => {
     const list: string[] = [];
-    const published = photos.filter((photo) => photo.isPublished);
-    const drafts = photos.filter((photo) => !photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
+    const drafts = scopedPhotos.filter((photo) => !photo.isPublished);
 
     if (drafts.length > 0) {
       list.push(`You have ${drafts.length} draft${drafts.length === 1 ? '' : 's'} waiting. Publish one today to sustain momentum.`);
@@ -130,10 +216,10 @@ export default function CreatorDashboardPage(): JSX.Element {
     }
 
     return list.slice(0, 3);
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const tagTrendBreakdown = useMemo(() => {
-    const published = photos.filter((photo) => photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
     const recent = [...published]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 12);
@@ -165,10 +251,10 @@ export default function CreatorDashboardPage(): JSX.Element {
       })
       .sort((a, b) => b.engagement - a.engagement)
       .slice(0, 5);
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const bestPostingWindow = useMemo(() => {
-    const published = photos.filter((photo) => photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
     if (published.length === 0) {
       return {
         label: 'Not enough data yet',
@@ -206,10 +292,10 @@ export default function CreatorDashboardPage(): JSX.Element {
       label: `${getDaypartLabel(bestHour)} (${start}:00-${end}:00)`,
       hint: `Your average engagement peaks around ${start}:00 based on published history.`,
     };
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const monthlyMomentum = useMemo(() => {
-    const published = photos.filter((photo) => photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
     const now = new Date();
     const months = Array.from({ length: 6 }).map((_, index) => {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
@@ -244,11 +330,11 @@ export default function CreatorDashboardPage(): JSX.Element {
       postPercent: Math.round((item.posts / maxPosts) * 100),
       engagementAvg: item.posts > 0 ? Math.round((item.engagement / item.posts) * 10) / 10 : 0,
     }));
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const cohortPerformance = useMemo(() => {
-    const published = photos.filter((photo) => photo.isPublished);
-    const drafts = photos.filter((photo) => !photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
+    const drafts = scopedPhotos.filter((photo) => !photo.isPublished);
 
     const publishedEngagement = published.reduce((sum, photo) => sum + (photo.likesCount ?? 0) + (photo.commentsCount ?? 0), 0);
     const publishedAvg = published.length > 0 ? Math.round((publishedEngagement / published.length) * 10) / 10 : 0;
@@ -263,7 +349,7 @@ export default function CreatorDashboardPage(): JSX.Element {
       publishedAvg,
       draftTagCoverage,
     };
-  }, [photos]);
+  }, [scopedPhotos]);
 
   const mediaTypePerformance = useMemo(() => {
     const published = photos.filter((photo) => photo.isPublished);
@@ -290,8 +376,8 @@ export default function CreatorDashboardPage(): JSX.Element {
   }, [photos]);
 
   const phaseFiveGoals = useMemo(() => {
-    const published = photos.filter((photo) => photo.isPublished);
-    const drafts = photos.filter((photo) => !photo.isPublished);
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
+    const drafts = scopedPhotos.filter((photo) => !photo.isPublished);
 
     const avgEngagement =
       published.length > 0
@@ -332,7 +418,122 @@ export default function CreatorDashboardPage(): JSX.Element {
         completed: recentCount >= 3,
       },
     ];
-  }, [photos]);
+  }, [scopedPhotos]);
+
+  const snapshotSummary = useMemo(() => {
+    const published = scopedPhotos.filter((photo) => photo.isPublished);
+    const drafts = scopedPhotos.filter((photo) => !photo.isPublished);
+    const likes = published.reduce((sum, photo) => sum + (photo.likesCount ?? 0), 0);
+    const comments = published.reduce((sum, photo) => sum + (photo.commentsCount ?? 0), 0);
+    const averageEngagement = published.length > 0 ? Math.round(((likes + comments) / published.length) * 10) / 10 : 0;
+
+    return {
+      total: scopedPhotos.length,
+      published: published.length,
+      drafts: drafts.length,
+      likes,
+      comments,
+      averageEngagement,
+    };
+  }, [scopedPhotos]);
+
+  const exportCsvSnapshot = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const rows = scopedPhotos.map((photo) => {
+      const engagement = photo.likesCount + photo.commentsCount;
+      const tags = (photo.tags ?? []).join('|');
+      return [
+        photo._id,
+        photo.title.replaceAll('"', '""'),
+        photo.isPublished ? 'published' : 'draft',
+        photo.mediaType ?? 'image',
+        String(photo.likesCount),
+        String(photo.commentsCount),
+        String(engagement),
+        String(photo.tags?.length ?? 0),
+        tags.replaceAll('"', '""'),
+        new Date(photo.createdAt).toISOString(),
+      ];
+    });
+
+    const header = ['id', 'title', 'status', 'mediaType', 'likes', 'comments', 'engagement', 'tagCount', 'tags', 'createdAt'];
+    const lines = [header, ...rows].map((line) => line.map((cell) => `"${cell}"`).join(','));
+    const csv = lines.join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `creator-snapshot-${selectedRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [scopedPhotos, selectedRange]);
+
+  const exportPdfSnapshot = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=980,height=720');
+    if (!printWindow) {
+      return;
+    }
+
+    const topItems = topPhotos
+      .map((photo, index) => {
+        const title = escapeHtml(photo.title);
+        return `<li>${index + 1}. ${title} (${photo.likesCount} likes, ${photo.commentsCount} comments)</li>`;
+      })
+      .join('');
+
+    const goals = phaseFiveGoals
+      .map((goal) => `<li>${escapeHtml(goal.title)}: ${goal.completed ? 'Completed' : 'In progress'}</li>`)
+      .join('');
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MOMENT Creator Snapshot</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 28px; color: #111; }
+      h1 { margin: 0 0 6px; }
+      h2 { margin: 18px 0 8px; font-size: 16px; }
+      p { margin: 4px 0; }
+      ul { margin: 8px 0; padding-left: 20px; }
+      .muted { color: #555; font-size: 12px; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>MOMENT Creator Performance Snapshot</h1>
+    <p class="muted">Range: ${rangeLabel} | Generated: ${new Date().toLocaleString()}</p>
+    <h2>Summary</h2>
+    <div class="grid">
+      <div class="card"><strong>Total Posts:</strong> ${snapshotSummary.total}</div>
+      <div class="card"><strong>Published:</strong> ${snapshotSummary.published}</div>
+      <div class="card"><strong>Drafts:</strong> ${snapshotSummary.drafts}</div>
+      <div class="card"><strong>Avg Engagement:</strong> ${snapshotSummary.averageEngagement}</div>
+    </div>
+    <h2>Top Moments</h2>
+    <ul>${topItems || '<li>No published moments in selected range.</li>'}</ul>
+    <h2>Phase 5 Checklist</h2>
+    <ul>${goals}</ul>
+  </body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }, [phaseFiveGoals, rangeLabel, snapshotSummary, topPhotos]);
 
   const actionPlaybook = useMemo(() => {
     const published = photos.filter((photo) => photo.isPublished);
@@ -373,6 +574,24 @@ export default function CreatorDashboardPage(): JSX.Element {
           Track momentum, prioritize your next move, and keep your publishing rhythm strong.
         </p>
 
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <p className="text-xs uppercase tracking-[0.12em] text-text-muted">Range</p>
+          {RANGE_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => handleRangeChange(option.key)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] transition ${
+                selectedRange === option.key
+                  ? 'border-accent-gold bg-accent-gold/15 text-accent-gold'
+                  : 'border-border text-text-secondary hover:border-accent-gold'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/creator/upload"
@@ -388,6 +607,22 @@ export default function CreatorDashboardPage(): JSX.Element {
             <ArrowUpRight size={15} />
             Open gallery
           </Link>
+          <button
+            type="button"
+            onClick={exportCsvSnapshot}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent-gold"
+          >
+            <Download size={15} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportPdfSnapshot}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent-gold"
+          >
+            <Printer size={15} />
+            Export PDF
+          </button>
         </div>
       </section>
 
