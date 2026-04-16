@@ -2,7 +2,19 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AxiosError } from 'axios';
-import { CheckCircle2, Circle, Copy, ExternalLink, ImageUp, MapPin, RefreshCcw, RotateCcw, Sparkles } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  Circle,
+  Copy,
+  ExternalLink,
+  ImageUp,
+  MapPin,
+  RefreshCcw,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -13,6 +25,7 @@ import DropZone from '@/components/creator/DropZone';
 import TagInput from '@/components/creator/TagInput';
 import UploadProgress from '@/components/creator/UploadProgress';
 import api from '@/lib/axios';
+import { uploadWithResumeStrategy } from '@/lib/resumable-upload';
 
 const uploadSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(100, 'Title max length is 100'),
@@ -127,6 +140,87 @@ export default function CreatorUploadPage(): JSX.Element {
       suggestedLocations,
     };
   }, [caption, tags, title]);
+
+  const qualityScore = useMemo(() => {
+    let score = 0;
+
+    if (selectedFile) {
+      score += 30;
+
+      if ((metadata?.width ?? 0) >= 1200 && (metadata?.height ?? 0) >= 720) {
+        score += 8;
+      }
+
+      if ((metadata?.fileSize ?? 0) <= 25 * 1024 * 1024) {
+        score += 5;
+      }
+    }
+
+    const trimmedTitle = title.trim();
+    if (trimmedTitle.length >= 8) {
+      score += 20;
+    } else if (trimmedTitle.length > 0) {
+      score += 10;
+    }
+
+    const trimmedCaption = caption.trim();
+    if (trimmedCaption.length >= 40) {
+      score += 15;
+    } else if (trimmedCaption.length > 0) {
+      score += 8;
+    }
+
+    if (locationName.trim().length > 0) {
+      score += 10;
+    }
+
+    score += Math.min(tags.length, 5) * 3;
+    score += Math.min(people.length, 3) * 2;
+
+    return Math.min(100, score);
+  }, [caption, locationName, metadata?.fileSize, metadata?.height, metadata?.width, people.length, selectedFile, tags.length, title]);
+
+  const qualityTier = useMemo(() => {
+    if (qualityScore >= 85) {
+      return { label: 'Excellent', color: 'text-success' };
+    }
+
+    if (qualityScore >= 65) {
+      return { label: 'Strong', color: 'text-accent-gold' };
+    }
+
+    if (qualityScore >= 45) {
+      return { label: 'Needs polish', color: 'text-yellow-400' };
+    }
+
+    return { label: 'Low readiness', color: 'text-error' };
+  }, [qualityScore]);
+
+  const qualityTips = useMemo(() => {
+    const tips: string[] = [];
+
+    if (!selectedFile) {
+      tips.push('Add media to start quality analysis');
+    }
+
+    if (title.trim().length < 8) {
+      tips.push('Use a more descriptive title (at least 8 characters)');
+    }
+
+    if (caption.trim().length < 40) {
+      tips.push('Add a richer caption to tell the story behind the frame');
+    }
+
+    if (locationName.trim().length === 0) {
+      tips.push('Set a location so discovery and trust improve');
+    }
+
+    if (tags.length < 3) {
+      tips.push('Use at least 3 tags for better discoverability');
+    }
+
+    return tips.slice(0, 3);
+  }, [caption, locationName, selectedFile, tags.length, title]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -301,36 +395,38 @@ export default function CreatorUploadPage(): JSX.Element {
       ),
     );
 
-    const formData = new FormData();
-    formData.append('image', item.file);
-    formData.append('title', item.values.title);
-    formData.append('caption', item.values.caption ?? '');
-    formData.append('locationName', item.values.locationName ?? '');
-    formData.append('people', JSON.stringify(item.people));
-    formData.append('tags', JSON.stringify(item.tags));
-    formData.append('isPublished', String(item.values.isPublished));
-
-    if (item.metadata) {
-      formData.append('width', String(item.metadata.width));
-      formData.append('height', String(item.metadata.height));
-    }
-
     try {
       setUploadStage('uploading');
 
-      const response = await api.post('/photos', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
+      const fields: Record<string, string> = {
+        title: item.values.title,
+        caption: item.values.caption ?? '',
+        locationName: item.values.locationName ?? '',
+        people: JSON.stringify(item.people),
+        tags: JSON.stringify(item.tags),
+        isPublished: String(item.values.isPublished),
+      };
+
+      if (item.metadata) {
+        fields.width = String(item.metadata.width);
+        fields.height = String(item.metadata.height);
+      }
+
+      const response = (await uploadWithResumeStrategy(
+        {
+          file: item.file,
+          fields,
         },
-        onUploadProgress: (event) => {
-          const total = event.total ?? item.file.size;
-          const progress = total > 0 ? Math.round((event.loaded / total) * 100) : 0;
-          setUploadProgress(progress);
-          setUploadQueue((current) =>
-            current.map((entry) => (entry.id === item.id ? { ...entry, progress } : entry)),
-          );
+        {
+          maxRetries: 2,
+          onProgress: (progress) => {
+            setUploadProgress(progress);
+            setUploadQueue((current) =>
+              current.map((entry) => (entry.id === item.id ? { ...entry, progress } : entry)),
+            );
+          },
         },
-      });
+      )) as { data?: { data?: { photo?: { _id?: string; title?: string } } } };
 
       setUploadStage('saving');
       setUploadQueue((current) =>
@@ -396,6 +492,36 @@ export default function CreatorUploadPage(): JSX.Element {
 
     void processQueueItem(next);
   }, [activeQueueId, uploadQueue]);
+
+  const moveQueueItem = (itemId: string, direction: 'up' | 'down'): void => {
+    setUploadQueue((current) => {
+      const index = current.findIndex((item) => item.id === itemId);
+      if (index === -1) {
+        return current;
+      }
+
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const copy = [...current];
+      const currentItem = copy[index];
+      const targetItem = copy[targetIndex];
+
+      if (!currentItem || !targetItem) {
+        return current;
+      }
+
+      if (currentItem.status === 'uploading' || targetItem.status === 'uploading') {
+        return current;
+      }
+
+      copy[index] = targetItem;
+      copy[targetIndex] = currentItem;
+      return copy;
+    });
+  };
 
   const onSubmit = async (values: UploadFormValues): Promise<void> => {
     if (!selectedFile) {
@@ -485,6 +611,29 @@ export default function CreatorUploadPage(): JSX.Element {
                   {item.label}
                 </p>
               ))}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-border bg-black/25 px-3 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-[0.14em] text-text-muted">Quality score</p>
+                <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${qualityTier.color}`}>{qualityTier.label}</p>
+              </div>
+
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/40">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-accent-gold-dark via-accent-gold to-success transition-all"
+                  style={{ width: `${qualityScore}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-text-secondary">{qualityScore}/100</p>
+
+              {qualityTips.length > 0 ? (
+                <ul className="mt-2 space-y-1 text-xs text-text-secondary">
+                  {qualityTips.map((tip) => (
+                    <li key={tip}>- {tip}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
 
@@ -654,7 +803,27 @@ export default function CreatorUploadPage(): JSX.Element {
                 <div key={item.id} className="rounded-2xl border border-border bg-bg-card/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium text-text-primary">{item.values.title}</p>
-                    <p className="text-xs uppercase tracking-[0.14em] text-text-muted">{item.status}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-[0.14em] text-text-muted">{item.status}</p>
+                      <button
+                        type="button"
+                        onClick={() => moveQueueItem(item.id, 'up')}
+                        className="rounded-full border border-border p-1 text-text-secondary transition hover:border-accent-gold hover:text-accent-gold disabled:opacity-40"
+                        disabled={item.status === 'uploading'}
+                        aria-label="Move queue item up"
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveQueueItem(item.id, 'down')}
+                        className="rounded-full border border-border p-1 text-text-secondary transition hover:border-accent-gold hover:text-accent-gold disabled:opacity-40"
+                        disabled={item.status === 'uploading'}
+                        aria-label="Move queue item down"
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30">
                     <div className="h-full rounded-full bg-accent-gold transition-all" style={{ width: `${item.progress}%` }} />
