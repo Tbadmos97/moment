@@ -8,7 +8,6 @@ export const metadata: Metadata = {
   description: 'Capture the moment. Share the story.',
   applicationName: 'MOMENT',
   keywords: ['MOMENT', 'photo sharing', 'creator platform', 'social media'],
-  themeColor: '#0A0A0A',
   appleWebApp: {
     capable: true,
     title: 'MOMENT',
