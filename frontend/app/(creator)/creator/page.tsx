@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Camera, ChartColumn, Clock3, Heart, MessageCircle, Sparkles, Upload } from 'lucide-react';
+import { ArrowUpRight, Camera, ChartColumn, Clock3, Heart, MessageCircle, Sparkles, TrendingUp, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
@@ -20,6 +20,22 @@ const formatCompact = (value: number): string =>
     notation: 'compact',
     maximumFractionDigits: value >= 1000 ? 1 : 0,
   }).format(value);
+
+const getDaypartLabel = (hour: number): string => {
+  if (hour >= 5 && hour < 12) {
+    return 'Morning';
+  }
+
+  if (hour >= 12 && hour < 17) {
+    return 'Afternoon';
+  }
+
+  if (hour >= 17 && hour < 22) {
+    return 'Evening';
+  }
+
+  return 'Late night';
+};
 
 export default function CreatorDashboardPage(): JSX.Element {
   const user = useAuthStore((state) => state.user);
@@ -97,6 +113,82 @@ export default function CreatorDashboardPage(): JSX.Element {
     }
 
     return list.slice(0, 3);
+  }, [photos]);
+
+  const tagTrendBreakdown = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    const recent = [...published]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 12);
+    const total = recent.length;
+    const trendMap = new Map<string, { count: number; likes: number; comments: number }>();
+
+    for (const photo of recent) {
+      const uniqueTags = Array.from(new Set((photo.tags ?? []).map((tag) => tag.trim()).filter(Boolean)));
+      for (const tag of uniqueTags) {
+        const existing = trendMap.get(tag) ?? { count: 0, likes: 0, comments: 0 };
+        trendMap.set(tag, {
+          count: existing.count + 1,
+          likes: existing.likes + (photo.likesCount ?? 0),
+          comments: existing.comments + (photo.commentsCount ?? 0),
+        });
+      }
+    }
+
+    return [...trendMap.entries()]
+      .map(([tag, stats]) => {
+        const share = total > 0 ? Math.round((stats.count / total) * 100) : 0;
+        const engagement = stats.likes + stats.comments;
+        return {
+          tag,
+          share,
+          posts: stats.count,
+          engagement,
+        };
+      })
+      .sort((a, b) => b.engagement - a.engagement)
+      .slice(0, 5);
+  }, [photos]);
+
+  const bestPostingWindow = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    if (published.length === 0) {
+      return {
+        label: 'Not enough data yet',
+        hint: 'Publish a few moments and we will surface your highest-performing time window.',
+      };
+    }
+
+    const hourStats = new Map<number, { totalEngagement: number; posts: number }>();
+
+    for (const photo of published) {
+      const hour = new Date(photo.createdAt).getHours();
+      const engagement = (photo.likesCount ?? 0) + (photo.commentsCount ?? 0);
+      const existing = hourStats.get(hour) ?? { totalEngagement: 0, posts: 0 };
+      hourStats.set(hour, {
+        totalEngagement: existing.totalEngagement + engagement,
+        posts: existing.posts + 1,
+      });
+    }
+
+    let bestHour = 0;
+    let bestScore = -1;
+
+    for (const [hour, stats] of hourStats.entries()) {
+      const avg = stats.posts > 0 ? stats.totalEngagement / stats.posts : 0;
+      if (avg > bestScore) {
+        bestScore = avg;
+        bestHour = hour;
+      }
+    }
+
+    const start = bestHour.toString().padStart(2, '0');
+    const end = ((bestHour + 2) % 24).toString().padStart(2, '0');
+
+    return {
+      label: `${getDaypartLabel(bestHour)} (${start}:00-${end}:00)`,
+      hint: `Your average engagement peaks around ${start}:00 based on published history.`,
+    };
   }, [photos]);
 
   return (
@@ -182,6 +274,46 @@ export default function CreatorDashboardPage(): JSX.Element {
                 {item}
               </div>
             ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <TrendingUp size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Trend breakdown</p>
+          </div>
+
+          {tagTrendBreakdown.length === 0 ? (
+            <p className="mt-3 text-sm text-text-secondary">Add tags to recent posts and trend clusters will appear here.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {tagTrendBreakdown.map((item) => (
+                <div key={item.tag} className="rounded-xl border border-border bg-black/20 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-text-primary">#{item.tag}</p>
+                    <p className="text-xs text-text-secondary">{item.engagement} interactions</p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/40">
+                    <div className="h-full rounded-full bg-gradient-to-r from-accent-gold-dark via-accent-gold to-accent-gold-light" style={{ width: `${item.share}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-text-secondary">{item.posts} recent posts • {item.share}% of latest uploads</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <Clock3 size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Best time to post</p>
+          </div>
+          <p className="mt-3 font-display text-3xl text-text-primary">{bestPostingWindow.label}</p>
+          <p className="mt-2 text-sm text-text-secondary">{bestPostingWindow.hint}</p>
+          <div className="mt-4 rounded-xl border border-border bg-black/20 px-3 py-3 text-xs text-text-secondary">
+            Insight model: calculated from average interactions per posting hour across your published moments.
           </div>
         </article>
       </section>
