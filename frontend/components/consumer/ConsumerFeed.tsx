@@ -44,6 +44,9 @@ export default function ConsumerFeed(): JSX.Element {
       }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const photos = useMemo(() => photosQuery.data?.pages.flatMap((page) => page.photos ?? []) ?? [], [photosQuery.data?.pages]);

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Heart } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { fetchPhotoById } from '@/lib/consumer-api';
 import type { Photo } from '@/types';
@@ -33,6 +33,7 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
   const [showBurst, setShowBurst] = useState(false);
   const [liked, setLiked] = useState(Boolean(photo.isLiked));
   const [likesCount, setLikesCount] = useState(photo.likesCount);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
   const displayImage = photo.imageUrl || photo.thumbnailUrl;
   const isVideo = photo.mediaType === 'video';
@@ -42,7 +43,11 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
     const height = photo.height ?? 1;
     const ratio = Math.max(Math.min((height / width) * 100, 180), 70);
     return `${ratio}%`;
-  }, [photo]);
+  }, [photo.height, photo.width]);
+
+  useEffect(() => {
+    setMediaLoaded(false);
+  }, [photo._id]);
 
   const onLikeClick = async (event: React.MouseEvent<HTMLButtonElement>): Promise<void> => {
     event.stopPropagation();
@@ -86,14 +91,23 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
       }}
     >
       <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
+        {!mediaLoaded ? (
+          <div className="absolute inset-0 z-[1] bg-bg-card">
+            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+          </div>
+        ) : null}
+
         {isVideo ? (
           <video
             src={photo.imageUrl}
             poster={photo.thumbnailUrl || undefined}
+            autoPlay
             muted
+            loop
             playsInline
             preload="metadata"
-            className="absolute inset-0 h-full w-full object-cover"
+            onLoadedData={() => setMediaLoaded(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition duration-300 ${mediaLoaded ? 'opacity-100' : 'opacity-0'}`}
           />
         ) : (
           <Image
@@ -102,7 +116,8 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             priority={index < 4}
-            className="absolute inset-0 h-full w-full object-cover"
+            onLoad={() => setMediaLoaded(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition duration-300 ${mediaLoaded ? 'opacity-100' : 'opacity-0'}`}
           />
         )}
 
