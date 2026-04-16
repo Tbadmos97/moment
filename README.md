@@ -126,18 +126,4 @@ NEXT_PUBLIC_APP_NAME=MOMENT
 - `npm run build`: build backend and frontend
 - `npm run test`: run backend tests and frontend lint checks
 
-## Module 9 Advanced Features
-
-- Cognitive Service (Auto Image Tagging): backend analyzes upload images and auto-suggests tags. Clarifai API is supported, with an automatic Sharp-based color palette fallback.
-- Advanced Identity Framework: centralized auth/session logic with refresh-token rotation, active sessions listing, and single-session revocation.
-- Real-time Interaction Updates: photo detail and comments refresh every 30s to keep likes/comments/rating data live.
-- CI/CD Pipeline: GitHub Actions runs frontend lint, backend tests with coverage, and both production builds.
-
-## Azure Deployment
-
-Full Azure deployment steps are documented in [docs/AZURE_DEPLOYMENT.md](docs/AZURE_DEPLOYMENT.md).
-
-## Presentation Slides
-
-Complete PowerPoint slide content is available in [docs/PRESENTATION_SLIDES_MODULE9.md](docs/PRESENTATION_SLIDES_MODULE9.md).
 
