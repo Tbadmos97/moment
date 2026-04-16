@@ -1,6 +1,20 @@
 import type { Request } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
+const parseInteger = (value: string | undefined, fallback: number): number => {
+  const parsed = Number.parseInt(value ?? '', 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const isProduction = process.env.NODE_ENV === 'production';
+const authWindowMs = parseInteger(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
+const authMax = parseInteger(process.env.AUTH_RATE_LIMIT_MAX, isProduction ? 5 : 100);
+
 const normalizeUserKey = (req: Request): string => {
   if (req.user?.id) {
     return req.user.id;
@@ -10,8 +24,10 @@ const normalizeUserKey = (req: Request): string => {
 };
 
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: authWindowMs,
+  max: authMax,
+  // Successful auth calls should not consume the brute-force budget.
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
