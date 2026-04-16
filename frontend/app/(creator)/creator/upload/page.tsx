@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AxiosError } from 'axios';
-import { CheckCircle2, Circle, ImageUp, MapPin, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Circle, Copy, ExternalLink, ImageUp, MapPin, RefreshCcw, RotateCcw, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -36,6 +36,20 @@ type UploadDraft = {
   tags: string[];
 };
 
+type UploadQueueStatus = 'queued' | 'uploading' | 'failed' | 'done';
+
+type UploadQueueItem = {
+  id: string;
+  file: File;
+  values: UploadFormValues;
+  people: string[];
+  tags: string[];
+  metadata: { width: number; height: number; fileSize: number; mediaKind: 'image' | 'video' } | null;
+  status: UploadQueueStatus;
+  progress: number;
+  error?: string;
+};
+
 export default function CreatorUploadPage(): JSX.Element {
   const router = useRouter();
 
@@ -50,6 +64,9 @@ export default function CreatorUploadPage(): JSX.Element {
   const [aiSuggestedTags, setAiSuggestedTags] = useState<AITag[]>([]);
   const [isAnalyzingTags, setIsAnalyzingTags] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
+  const [activeQueueId, setActiveQueueId] = useState<string | null>(null);
+  const [lastPublished, setLastPublished] = useState<{ id: string; title: string } | null>(null);
 
   const {
     register,
@@ -71,6 +88,45 @@ export default function CreatorUploadPage(): JSX.Element {
   const title = watch('title') ?? '';
   const locationName = watch('locationName') ?? '';
   const isPublished = watch('isPublished');
+
+  const metadataAssistantSuggestions = useMemo(() => {
+    const source = `${title} ${caption}`.toLowerCase();
+
+    const smartTagRules: Array<{ keyword: RegExp; tag: string }> = [
+      { keyword: /(night|neon|city)/, tag: 'nightscape' },
+      { keyword: /(sunset|golden|sunrise)/, tag: 'goldenhour' },
+      { keyword: /(travel|journey|trip|explore)/, tag: 'travel' },
+      { keyword: /(portrait|face|model)/, tag: 'portrait' },
+      { keyword: /(food|coffee|dinner|breakfast)/, tag: 'foodstory' },
+      { keyword: /(beach|ocean|sea|coast)/, tag: 'seaside' },
+    ];
+
+    const smartLocationRules: Array<{ keyword: RegExp; location: string }> = [
+      { keyword: /(london|thames|camden)/, location: 'London, UK' },
+      { keyword: /(paris|eiffel|louvre)/, location: 'Paris, France' },
+      { keyword: /(new york|nyc|manhattan)/, location: 'New York, USA' },
+      { keyword: /(dubai|marina|burj)/, location: 'Dubai, UAE' },
+      { keyword: /(tokyo|shibuya|shinjuku)/, location: 'Tokyo, Japan' },
+      { keyword: /(istanbul|bosphorus)/, location: 'Istanbul, Turkey' },
+    ];
+
+    const suggestedTags = smartTagRules
+      .filter((rule) => rule.keyword.test(source))
+      .map((rule) => rule.tag)
+      .filter((tagItem) => !tags.includes(tagItem))
+      .slice(0, 4);
+
+    const suggestedLocations = smartLocationRules
+      .filter((rule) => rule.keyword.test(source))
+      .map((rule) => rule.location)
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .slice(0, 3);
+
+    return {
+      suggestedTags,
+      suggestedLocations,
+    };
+  }, [caption, tags, title]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -217,15 +273,129 @@ export default function CreatorUploadPage(): JSX.Element {
     };
   }, [selectedFile]);
 
-  const isUploading = uploadStage !== 'idle' && uploadStage !== 'published' ? true : isSubmitting;
+  const isUploading = Boolean(activeQueueId) || isSubmitting;
 
   const buttonLabel = useMemo(() => {
     if (isUploading) {
-      return 'Uploading...';
+      return 'Queue processing...';
     }
 
-    return 'Publish Moment';
+    return 'Add To Queue';
   }, [isUploading]);
+
+  const processQueueItem = async (item: UploadQueueItem): Promise<void> => {
+    setActiveQueueId(item.id);
+    setUploadStage('processing');
+    setUploadProgress(10);
+
+    setUploadQueue((current) =>
+      current.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              status: 'uploading',
+              progress: 10,
+              error: undefined,
+            }
+          : entry,
+      ),
+    );
+
+    const formData = new FormData();
+    formData.append('image', item.file);
+    formData.append('title', item.values.title);
+    formData.append('caption', item.values.caption ?? '');
+    formData.append('locationName', item.values.locationName ?? '');
+    formData.append('people', JSON.stringify(item.people));
+    formData.append('tags', JSON.stringify(item.tags));
+    formData.append('isPublished', String(item.values.isPublished));
+
+    if (item.metadata) {
+      formData.append('width', String(item.metadata.width));
+      formData.append('height', String(item.metadata.height));
+    }
+
+    try {
+      setUploadStage('uploading');
+
+      const response = await api.post('/photos', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (event) => {
+          const total = event.total ?? item.file.size;
+          const progress = total > 0 ? Math.round((event.loaded / total) * 100) : 0;
+          setUploadProgress(progress);
+          setUploadQueue((current) =>
+            current.map((entry) => (entry.id === item.id ? { ...entry, progress } : entry)),
+          );
+        },
+      });
+
+      setUploadStage('saving');
+      setUploadQueue((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                status: 'done',
+                progress: 100,
+              }
+            : entry,
+        ),
+      );
+
+      const photoId = response.data?.data?.photo?._id as string | undefined;
+      const photoTitle = response.data?.data?.photo?.title as string | undefined;
+      if (photoId && photoTitle) {
+        setLastPublished({ id: photoId, title: photoTitle });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
+      }
+
+      setUploadStage('published');
+      setUploadProgress(100);
+      toast.success(`Uploaded: ${item.values.title}`);
+    } catch (error) {
+      const message =
+        error instanceof AxiosError
+          ? (error.response?.data?.message as string | undefined) ?? 'Upload failed. Please try again.'
+          : 'Upload failed. Please try again.';
+
+      setUploadQueue((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                status: 'failed',
+                error: message,
+              }
+            : entry,
+        ),
+      );
+
+      setUploadStage('idle');
+      setUploadProgress(0);
+      toast.error(message);
+    } finally {
+      setActiveQueueId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeQueueId) {
+      return;
+    }
+
+    const next = uploadQueue.find((item) => item.status === 'queued');
+    if (!next) {
+      return;
+    }
+
+    void processQueueItem(next);
+  }, [activeQueueId, uploadQueue]);
 
   const onSubmit = async (values: UploadFormValues): Promise<void> => {
     if (!selectedFile) {
@@ -234,66 +404,30 @@ export default function CreatorUploadPage(): JSX.Element {
     }
 
     setDropError(null);
-    setUploadStage('processing');
-    setUploadProgress(12);
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 380);
+    const queueItem: UploadQueueItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      file: selectedFile,
+      values,
+      people: [...people],
+      tags: [...tags],
+      metadata,
+      status: 'queued',
+      progress: 0,
+    };
+
+    setUploadQueue((current) => [...current, queueItem]);
+    toast.success(`Added to queue: ${values.title}`);
+
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setMetadata(null);
+    reset({
+      title: '',
+      caption: '',
+      locationName: values.locationName,
+      isPublished: values.isPublished,
     });
-
-    const formData = new FormData();
-    formData.append('image', selectedFile);
-    formData.append('title', values.title);
-    formData.append('caption', values.caption ?? '');
-    formData.append('locationName', values.locationName ?? '');
-    formData.append('people', JSON.stringify(people));
-    formData.append('tags', JSON.stringify(tags));
-    formData.append('isPublished', String(values.isPublished));
-    if (metadata) {
-      formData.append('width', String(metadata.width));
-      formData.append('height', String(metadata.height));
-    }
-
-    try {
-      setUploadStage('uploading');
-
-      await api.post('/photos', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (event) => {
-          const total = event.total ?? selectedFile.size;
-          const progress = total > 0 ? Math.round((event.loaded / total) * 100) : 0;
-          setUploadProgress(progress);
-        },
-      });
-
-      setUploadStage('saving');
-      await new Promise((resolve) => {
-        setTimeout(resolve, 420);
-      });
-
-      setUploadStage('published');
-      setUploadProgress(100);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
-      }
-      toast.success('Moment published successfully');
-
-      setTimeout(() => {
-        router.push('/creator/my-photos');
-      }, 1100);
-    } catch (error) {
-      setUploadStage('idle');
-      setUploadProgress(0);
-
-      const message =
-        error instanceof AxiosError
-          ? (error.response?.data?.message as string | undefined) ?? 'Upload failed. Please try again.'
-          : 'Upload failed. Please try again.';
-
-      toast.error(message);
-    }
   };
 
   return (
@@ -398,6 +532,20 @@ export default function CreatorUploadPage(): JSX.Element {
                   {...register('locationName')}
                 />
               </div>
+              {metadataAssistantSuggestions.suggestedLocations.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {metadataAssistantSuggestions.suggestedLocations.map((location) => (
+                    <button
+                      key={location}
+                      type="button"
+                      onClick={() => reset({ title, caption, locationName: location, isPublished })}
+                      className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                    >
+                      {location}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {errors.locationName ? <p className="mt-1 text-xs text-error">{errors.locationName.message}</p> : null}
             </div>
 
@@ -415,6 +563,32 @@ export default function CreatorUploadPage(): JSX.Element {
               onChange={setTags}
               lowerCase
             />
+
+            {metadataAssistantSuggestions.suggestedTags.length > 0 ? (
+              <div className="rounded-2xl border border-border bg-bg-card px-4 py-3">
+                <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-accent-gold">
+                  <Sparkles size={14} />
+                  Smart tag suggestions
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {metadataAssistantSuggestions.suggestedTags.map((tagItem) => (
+                    <button
+                      key={tagItem}
+                      type="button"
+                      onClick={() => {
+                        setTags((current) => {
+                          const next = Array.from(new Set([...current, tagItem]));
+                          return next.slice(0, 10);
+                        });
+                      }}
+                      className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                    >
+                      #{tagItem}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {isAnalyzingTags || aiSuggestedTags.length > 0 ? (
               <div className="rounded-2xl border border-border bg-bg-card px-4 py-3">
@@ -464,6 +638,104 @@ export default function CreatorUploadPage(): JSX.Element {
               {buttonLabel}
             </button>
           </form>
+        </section>
+
+        <section className="rounded-3xl border border-border bg-bg-secondary/70 p-6 md:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.18em] text-accent-gold">Upload Queue</p>
+            <p className="text-xs text-text-muted">{uploadQueue.filter((item) => item.status === 'queued' || item.status === 'uploading').length} pending</p>
+          </div>
+
+          {uploadQueue.length === 0 ? <p className="mt-3 text-sm text-text-secondary">No queued uploads yet.</p> : null}
+
+          {uploadQueue.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {uploadQueue.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-border bg-bg-card/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-text-primary">{item.values.title}</p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-text-muted">{item.status}</p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30">
+                    <div className="h-full rounded-full bg-accent-gold transition-all" style={{ width: `${item.progress}%` }} />
+                  </div>
+
+                  {item.error ? <p className="mt-2 text-xs text-error">{item.error}</p> : null}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {item.status === 'failed' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadQueue((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, status: 'queued', progress: 0, error: undefined }
+                                : entry,
+                            ),
+                          );
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                      >
+                        <RefreshCcw size={12} />
+                        Retry
+                      </button>
+                    ) : null}
+
+                    {(item.status === 'done' || item.status === 'failed') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadQueue((current) => current.filter((entry) => entry.id !== item.id));
+                        }}
+                        className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {lastPublished ? (
+            <div className="mt-6 rounded-2xl border border-border bg-bg-card px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-accent-gold">Latest publish</p>
+              <p className="mt-2 text-sm font-medium text-text-primary">{lastPublished.title}</p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.push('/creator/my-photos')}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                >
+                  <ExternalLink size={12} />
+                  My photos
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (typeof window === 'undefined') {
+                      return;
+                    }
+                    const link = `${window.location.origin}/photos/${lastPublished.id}`;
+                    try {
+                      await navigator.clipboard.writeText(link);
+                      toast.success('Share link copied');
+                    } catch {
+                      toast.error('Unable to copy link');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                >
+                  <Copy size={12} />
+                  Copy link
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
