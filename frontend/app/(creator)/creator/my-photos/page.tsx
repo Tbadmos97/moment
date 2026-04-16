@@ -3,14 +3,44 @@
 import { useQuery } from '@tanstack/react-query';
 import { Camera, Sparkles, Upload } from 'lucide-react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
 import { fetchCreatorPhotos } from '@/lib/consumer-api';
 import { useAuthStore } from '@/store/authStore';
 
+const getOptimizationScore = (photo: {
+  title: string;
+  caption: string;
+  tags?: string[];
+  location?: { name?: string };
+  people?: string[];
+}): number => {
+  let score = 0;
+
+  if (photo.title.trim().length >= 8) {
+    score += 20;
+  }
+
+  if (photo.caption.trim().length >= 40) {
+    score += 25;
+  }
+
+  score += Math.min(photo.tags?.length ?? 0, 5) * 8;
+
+  if ((photo.location?.name ?? '').trim().length > 0) {
+    score += 10;
+  }
+
+  score += Math.min(photo.people?.length ?? 0, 3) * 5;
+
+  return Math.min(100, score);
+};
+
 export default function CreatorMyPhotosPage(): JSX.Element {
   const user = useAuthStore((state) => state.user);
+  const searchParams = useSearchParams();
 
   const photosQuery = useQuery({
     queryKey: ['creator-my-photos', user?._id],
@@ -19,6 +49,10 @@ export default function CreatorMyPhotosPage(): JSX.Element {
   });
 
   const photos = useMemo(() => photosQuery.data?.photos ?? [], [photosQuery.data?.photos]);
+
+  const statusFilter = searchParams.get('status') ?? 'all';
+  const optimizeFilter = searchParams.get('optimize') ?? 'none';
+  const sortFilter = searchParams.get('sort') ?? 'newest';
 
   const getOptimizationTips = (photo: {
     title: string;
@@ -60,38 +94,81 @@ export default function CreatorMyPhotosPage(): JSX.Element {
     return tips.slice(0, 2);
   };
 
-  const getOptimizationScore = (photo: {
-    title: string;
-    caption: string;
-    tags?: string[];
-    location?: { name?: string };
-    people?: string[];
-  }): number => {
-    let score = 0;
+  const filteredPhotos = useMemo(() => {
+    const statusFiltered = photos.filter((photo) => {
+      if (statusFilter === 'published') {
+        return Boolean(photo.isPublished);
+      }
 
-    if (photo.title.trim().length >= 8) {
-      score += 20;
+      if (statusFilter === 'draft') {
+        return !photo.isPublished;
+      }
+
+      return true;
+    });
+
+    const optimizeFiltered = statusFiltered.filter((photo) => {
+      if (optimizeFilter === 'tags') {
+        return (photo.tags?.length ?? 0) < 3;
+      }
+
+      if (optimizeFilter === 'engagement') {
+        return photo.isPublished && photo.likesCount + photo.commentsCount < 3;
+      }
+
+      return true;
+    });
+
+    const sorted = [...optimizeFiltered].sort((a, b) => {
+      if (sortFilter === 'top') {
+        return b.likesCount + b.commentsCount - (a.likesCount + a.commentsCount);
+      }
+
+      if (sortFilter === 'optimization') {
+        return getOptimizationScore(a) - getOptimizationScore(b);
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return sorted;
+  }, [optimizeFilter, photos, sortFilter, statusFilter]);
+
+  const activeFilterPills = useMemo(() => {
+    const pills: string[] = [];
+
+    if (statusFilter !== 'all') {
+      pills.push(`Status: ${statusFilter}`);
     }
 
-    if (photo.caption.trim().length >= 40) {
-      score += 25;
+    if (optimizeFilter !== 'none') {
+      pills.push(`Optimization: ${optimizeFilter}`);
     }
 
-    score += Math.min(photo.tags?.length ?? 0, 5) * 8;
-
-    if ((photo.location?.name ?? '').trim().length > 0) {
-      score += 10;
+    if (sortFilter !== 'newest') {
+      pills.push(`Sort: ${sortFilter}`);
     }
 
-    score += Math.min(photo.people?.length ?? 0, 3) * 5;
-
-    return Math.min(100, score);
-  };
+    return pills;
+  }, [optimizeFilter, sortFilter, statusFilter]);
 
   return (
     <main className="p-6 md:p-10">
       <h1 className="text-4xl font-display">My Photos</h1>
       <p className="mt-3 text-text-secondary">All your published and draft moments in one place.</p>
+
+      {activeFilterPills.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {activeFilterPills.map((pill) => (
+            <span key={pill} className="rounded-full border border-border bg-black/25 px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary">
+              {pill}
+            </span>
+          ))}
+          <Link href="/creator/my-photos" className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold">
+            Clear filters
+          </Link>
+        </div>
+      ) : null}
 
       {photosQuery.isPending ? (
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -119,9 +196,9 @@ export default function CreatorMyPhotosPage(): JSX.Element {
         </section>
       ) : null}
 
-      {!photosQuery.isPending && photos.length > 0 ? (
+      {!photosQuery.isPending && filteredPhotos.length > 0 ? (
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {photos.map((photo) => (
+          {filteredPhotos.map((photo) => (
             <article key={photo._id} className="overflow-hidden rounded-2xl border border-border bg-bg-card">
               <div className="relative h-52 w-full">
                 {photo.mediaType === 'video' ? (
@@ -160,6 +237,15 @@ export default function CreatorMyPhotosPage(): JSX.Element {
               </div>
             </article>
           ))}
+        </section>
+      ) : null}
+
+      {!photosQuery.isPending && photos.length > 0 && filteredPhotos.length === 0 ? (
+        <section className="mt-8 rounded-2xl border border-border bg-bg-card/60 p-6 text-center">
+          <p className="text-sm text-text-secondary">No photos match the current filters.</p>
+          <Link href="/creator/my-photos" className="mt-3 inline-flex rounded-xl border border-border px-4 py-2 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold">
+            Reset and view all
+          </Link>
         </section>
       ) : null}
     </main>

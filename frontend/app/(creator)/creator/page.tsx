@@ -1,7 +1,19 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Camera, ChartColumn, Clock3, Heart, MessageCircle, Sparkles, TrendingUp, Upload } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Camera,
+  ChartColumn,
+  CheckCircle2,
+  Clock3,
+  Heart,
+  MessageCircle,
+  Sparkles,
+  TrendingUp,
+  Upload,
+  Video,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
@@ -36,6 +48,11 @@ const getDaypartLabel = (hour: number): string => {
 
   return 'Late night';
 };
+
+const getMonthLabel = (date: Date): string =>
+  new Intl.DateTimeFormat('en', {
+    month: 'short',
+  }).format(date);
 
 export default function CreatorDashboardPage(): JSX.Element {
   const user = useAuthStore((state) => state.user);
@@ -191,6 +208,162 @@ export default function CreatorDashboardPage(): JSX.Element {
     };
   }, [photos]);
 
+  const monthlyMomentum = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    const now = new Date();
+    const months = Array.from({ length: 6 }).map((_, index) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+      const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
+      return {
+        key,
+        label: getMonthLabel(monthDate),
+        posts: 0,
+        engagement: 0,
+      };
+    });
+
+    const monthMap = new Map(months.map((item) => [item.key, item]));
+
+    for (const photo of published) {
+      const createdAt = new Date(photo.createdAt);
+      const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}`;
+      const bucket = monthMap.get(key);
+
+      if (!bucket) {
+        continue;
+      }
+
+      bucket.posts += 1;
+      bucket.engagement += (photo.likesCount ?? 0) + (photo.commentsCount ?? 0);
+    }
+
+    const maxPosts = Math.max(...months.map((item) => item.posts), 1);
+
+    return months.map((item) => ({
+      ...item,
+      postPercent: Math.round((item.posts / maxPosts) * 100),
+      engagementAvg: item.posts > 0 ? Math.round((item.engagement / item.posts) * 10) / 10 : 0,
+    }));
+  }, [photos]);
+
+  const cohortPerformance = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    const drafts = photos.filter((photo) => !photo.isPublished);
+
+    const publishedEngagement = published.reduce((sum, photo) => sum + (photo.likesCount ?? 0) + (photo.commentsCount ?? 0), 0);
+    const publishedAvg = published.length > 0 ? Math.round((publishedEngagement / published.length) * 10) / 10 : 0;
+    const draftTagCoverage =
+      drafts.length > 0
+        ? Math.round((drafts.filter((photo) => (photo.tags?.length ?? 0) >= 3).length / drafts.length) * 100)
+        : 0;
+
+    return {
+      publishedCount: published.length,
+      draftsCount: drafts.length,
+      publishedAvg,
+      draftTagCoverage,
+    };
+  }, [photos]);
+
+  const mediaTypePerformance = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+
+    const imagePosts = published.filter((photo) => photo.mediaType !== 'video');
+    const videoPosts = published.filter((photo) => photo.mediaType === 'video');
+
+    const imageEngagement = imagePosts.reduce((sum, photo) => sum + photo.likesCount + photo.commentsCount, 0);
+    const videoEngagement = videoPosts.reduce((sum, photo) => sum + photo.likesCount + photo.commentsCount, 0);
+
+    const imageAvg = imagePosts.length > 0 ? Math.round((imageEngagement / imagePosts.length) * 10) / 10 : 0;
+    const videoAvg = videoPosts.length > 0 ? Math.round((videoEngagement / videoPosts.length) * 10) / 10 : 0;
+
+    return {
+      image: {
+        count: imagePosts.length,
+        avg: imageAvg,
+      },
+      video: {
+        count: videoPosts.length,
+        avg: videoAvg,
+      },
+    };
+  }, [photos]);
+
+  const phaseFiveGoals = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    const drafts = photos.filter((photo) => !photo.isPublished);
+
+    const avgEngagement =
+      published.length > 0
+        ? published.reduce((sum, photo) => sum + photo.likesCount + photo.commentsCount, 0) / published.length
+        : 0;
+    const strongTagCoverage =
+      published.length > 0
+        ? (published.filter((photo) => (photo.tags?.length ?? 0) >= 3).length / published.length) * 100
+        : 0;
+    const recentCount = [...published].filter(
+      (photo) => Date.now() - new Date(photo.createdAt).getTime() <= 14 * 24 * 60 * 60 * 1000,
+    ).length;
+
+    return [
+      {
+        title: 'Portfolio baseline',
+        description: 'Maintain at least 12 published moments.',
+        completed: published.length >= 12,
+      },
+      {
+        title: 'Draft hygiene',
+        description: 'Keep draft queue to 3 or fewer.',
+        completed: drafts.length <= 3,
+      },
+      {
+        title: 'Engagement quality',
+        description: 'Average at least 5 interactions per published post.',
+        completed: avgEngagement >= 5,
+      },
+      {
+        title: 'Tag consistency',
+        description: 'At least 70% of published posts with 3+ tags.',
+        completed: strongTagCoverage >= 70,
+      },
+      {
+        title: 'Recency momentum',
+        description: 'Publish at least 3 moments in the last 14 days.',
+        completed: recentCount >= 3,
+      },
+    ];
+  }, [photos]);
+
+  const actionPlaybook = useMemo(() => {
+    const published = photos.filter((photo) => photo.isPublished);
+    const drafts = photos.filter((photo) => !photo.isPublished);
+    const lowTagPublished = published.filter((photo) => (photo.tags?.length ?? 0) < 3).length;
+    const lowEngagement = published.filter((photo) => photo.likesCount + photo.commentsCount < 3).length;
+
+    return [
+      {
+        title: 'Clear draft backlog',
+        hint: `${drafts.length} drafts pending review`,
+        href: '/creator/my-photos?status=draft',
+      },
+      {
+        title: 'Fix under-tagged posts',
+        hint: `${lowTagPublished} published posts below 3 tags`,
+        href: '/creator/my-photos?status=published&optimize=tags',
+      },
+      {
+        title: 'Recover low engagement posts',
+        hint: `${lowEngagement} posts need better copy or timing`,
+        href: '/creator/my-photos?status=published&optimize=engagement',
+      },
+      {
+        title: 'Promote top performers',
+        hint: 'Focus your strongest moments first',
+        href: '/creator/my-photos?status=published&sort=top',
+      },
+    ];
+  }, [photos]);
+
   return (
     <main className="p-6 md:p-10">
       <section className="rounded-3xl border border-border bg-bg-card/70 p-6 md:p-8">
@@ -314,6 +487,101 @@ export default function CreatorDashboardPage(): JSX.Element {
           <p className="mt-2 text-sm text-text-secondary">{bestPostingWindow.hint}</p>
           <div className="mt-4 rounded-xl border border-border bg-black/20 px-3 py-3 text-xs text-text-secondary">
             Insight model: calculated from average interactions per posting hour across your published moments.
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <ChartColumn size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Monthly momentum</p>
+          </div>
+          <div className="mt-3 space-y-2">
+            {monthlyMomentum.map((month) => (
+              <div key={month.key} className="rounded-xl border border-border bg-black/20 px-3 py-3">
+                <div className="flex items-center justify-between gap-2 text-xs text-text-secondary">
+                  <span>{month.label}</span>
+                  <span>{month.posts} posts • {month.engagementAvg} avg interactions</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/40">
+                  <div className="h-full rounded-full bg-gradient-to-r from-accent-gold-dark via-accent-gold to-accent-gold-light" style={{ width: `${month.postPercent}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <Camera size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Cohort performance</p>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-text-muted">Published</p>
+              <p className="mt-1 font-display text-3xl text-text-primary">{cohortPerformance.publishedCount}</p>
+              <p className="text-xs text-text-secondary">{cohortPerformance.publishedAvg} avg interactions</p>
+            </div>
+            <div className="rounded-xl border border-border bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-text-muted">Drafts</p>
+              <p className="mt-1 font-display text-3xl text-text-primary">{cohortPerformance.draftsCount}</p>
+              <p className="text-xs text-text-secondary">{cohortPerformance.draftTagCoverage}% ready with 3+ tags</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-3">
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5 xl:col-span-1">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <Video size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Media split</p>
+          </div>
+          <div className="mt-3 space-y-3 text-sm">
+            <div className="rounded-xl border border-border bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-text-muted">Image posts</p>
+              <p className="mt-1 font-display text-2xl text-text-primary">{mediaTypePerformance.image.count}</p>
+              <p className="text-xs text-text-secondary">{mediaTypePerformance.image.avg} avg interactions</p>
+            </div>
+            <div className="rounded-xl border border-border bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-text-muted">Video posts</p>
+              <p className="mt-1 font-display text-2xl text-text-primary">{mediaTypePerformance.video.count}</p>
+              <p className="text-xs text-text-secondary">{mediaTypePerformance.video.avg} avg interactions</p>
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5 xl:col-span-1">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <CheckCircle2 size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Phase 5 checklist</p>
+          </div>
+          <div className="mt-3 space-y-2">
+            {phaseFiveGoals.map((goal) => (
+              <div key={goal.title} className="rounded-xl border border-border bg-black/20 px-3 py-3">
+                <p className="text-sm font-semibold text-text-primary">{goal.title}</p>
+                <p className="mt-1 text-xs text-text-secondary">{goal.description}</p>
+                <p className={`mt-1 text-xs font-semibold ${goal.completed ? 'text-success' : 'text-text-muted'}`}>
+                  {goal.completed ? 'Completed' : 'In progress'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-border bg-bg-card/70 p-5 xl:col-span-1">
+          <div className="flex items-center gap-2 text-accent-gold">
+            <ArrowUpRight size={16} />
+            <p className="text-xs uppercase tracking-[0.14em]">Action playbook</p>
+          </div>
+          <div className="mt-3 space-y-2">
+            {actionPlaybook.map((action) => (
+              <Link key={action.title} href={action.href} className="block rounded-xl border border-border bg-black/20 px-3 py-3 transition hover:border-accent-gold">
+                <p className="text-sm font-semibold text-text-primary">{action.title}</p>
+                <p className="mt-1 text-xs text-text-secondary">{action.hint}</p>
+              </Link>
+            ))}
           </div>
         </article>
       </section>
