@@ -45,6 +45,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
   const [draft, setDraft] = useState('');
   const [selectedRating, setSelectedRating] = useState<number | undefined>();
   const [hoverRating, setHoverRating] = useState<number | undefined>();
+  const [visibleCount, setVisibleCount] = useState(5);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const commentsQuery = useInfiniteQuery({
@@ -52,6 +53,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
     queryFn: ({ pageParam }) => fetchComments(photoId, pageParam as number, 20),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    refetchInterval: 30_000,
     initialData: {
       pages: [
         {
@@ -73,6 +75,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
   });
 
   const comments = useMemo(() => commentsQuery.data?.pages.flatMap((page) => page.comments) ?? [], [commentsQuery.data?.pages]);
+  const visibleComments = comments.slice(0, visibleCount);
   const firstPage = commentsQuery.data?.pages[0];
   const userHasRated = firstPage?.userHasRated ?? false;
   const userRating = firstPage?.userRating ?? null;
@@ -98,6 +101,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
           username: user?.username || 'you',
           avatar: user?.avatar,
           role: user?.role || 'consumer',
+          createdAt: user?.createdAt ?? new Date().toISOString(),
         },
       };
 
@@ -324,7 +328,7 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
 
       <section className="space-y-3">
         <AnimatePresence initial={false}>
-          {comments.map((comment) => {
+          {visibleComments.map((comment) => {
             const canDelete = Boolean(user) && (comment.author._id === user?._id || photoCreatorId === user?._id || user?.role === 'admin');
 
             return (
@@ -339,6 +343,18 @@ export default function CommentSection({ photoId, photoCreatorId, initialComment
             );
           })}
         </AnimatePresence>
+
+        {comments.length > visibleCount ? (
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((count) => count + 5)}
+              className="rounded-full border border-border bg-bg-card px-5 py-2 text-xs uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+            >
+              Show more comments
+            </button>
+          </div>
+        ) : null}
 
         {commentsQuery.hasNextPage ? (
           <div className="pt-2 text-center">

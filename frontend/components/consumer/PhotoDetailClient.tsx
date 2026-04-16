@@ -25,9 +25,11 @@ export default function PhotoDetailClient({ photoId, initialPhoto }: PhotoDetail
     queryFn: () => fetchPhotoById(photoId),
     initialData: initialPhoto,
     enabled: Boolean(photoId),
+    refetchInterval: 30_000,
   });
 
   const photo = photoQuery.data;
+  const isVideo = photo?.mediaType === 'video';
 
   const likeMutation = useMutation({
     mutationFn: async ({ nextLiked }: { nextLiked: boolean }) => {
@@ -107,32 +109,49 @@ export default function PhotoDetailClient({ photoId, initialPhoto }: PhotoDetail
         <div
           role="button"
           tabIndex={0}
-          onClick={() => setZoomed((value) => !value)}
+          onClick={() => {
+            if (!isVideo) {
+              setZoomed((value) => !value);
+            }
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            if (!isVideo && (event.key === 'Enter' || event.key === ' ')) {
               event.preventDefault();
               setZoomed((value) => !value);
             }
           }}
           className="relative h-[65vh] overflow-hidden rounded-2xl bg-bg-card lg:h-[82vh]"
         >
-          <motion.div
-            animate={{ scale: zoomed ? 1.15 : 1 }}
-            transition={{ duration: 0.4 }}
-            className="relative h-full w-full"
-          >
-            <Image
+          {isVideo ? (
+            <video
               src={photo.imageUrl}
-              alt={photo.title}
-              fill
-              priority
-              sizes="(max-width: 1024px) 100vw, 65vw"
-              className={aspectClass}
+              poster={photo.thumbnailUrl || undefined}
+              controls
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-contain"
             />
-          </motion.div>
-          <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-white/20 bg-black/30 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/85">
-            Tap to zoom
-          </div>
+          ) : (
+            <>
+              <motion.div
+                animate={{ scale: zoomed ? 1.15 : 1 }}
+                transition={{ duration: 0.4 }}
+                className="relative h-full w-full"
+              >
+                <Image
+                  src={photo.imageUrl}
+                  alt={photo.title}
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 65vw"
+                  className={aspectClass}
+                />
+              </motion.div>
+              <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-white/20 bg-black/30 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/85">
+                Tap to zoom
+              </div>
+            </>
+          )}
         </div>
       </section>
 

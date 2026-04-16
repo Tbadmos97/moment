@@ -63,9 +63,7 @@ export const setupAdminValidation: ValidationChain[] = [
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password')
     .isLength({ min: 8, max: 128 })
-    .withMessage('Password must be between 8 and 128 characters')
-    .matches(/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/)
-    .withMessage('Password must include one uppercase letter, one number, and one special character'),
+    .withMessage('Password must be between 8 and 128 characters'),
   body('adminSetupSecret')
     .trim()
     .isLength({ min: 6, max: 128 })

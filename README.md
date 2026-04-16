@@ -1,5 +1,8 @@
 # MOMENT
 
+[![CI](https://github.com/zahidiqbal/moment/actions/workflows/ci.yml/badge.svg)](https://github.com/zahidiqbal/moment/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/badge/coverage-generated%20in%20CI-2F855A)
+
 Capture the moment. Share the story.
 
 MOMENT is a production-oriented photo sharing platform built for COM769 Scalable Advanced Software Solutions. The project is split into two deployable services: a Next.js 14 frontend and an Express.js backend API.
@@ -13,7 +16,7 @@ MOMENT is a production-oriented photo sharing platform built for COM769 Scalable
 - Cache: Upstash Redis
 - Auth: JWT access/refresh tokens + bcryptjs
 - CI/CD: GitHub Actions
-- Deployment Targets: Vercel (frontend), Render (backend)
+- Deployment Target: Microsoft Azure (frontend + backend)
 
 ## Repository Structure
 
@@ -104,6 +107,10 @@ UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 FRONTEND_URL=http://localhost:3000
 ADMIN_SETUP_SECRET=
+CLARIFAI_API_KEY=
+CLARIFAI_USER_ID=clarifai
+CLARIFAI_APP_ID=main
+CLARIFAI_MODEL_ID=general-image-recognition
 ```
 
 ### Frontend (`frontend/.env.local`)
@@ -118,4 +125,19 @@ NEXT_PUBLIC_APP_NAME=MOMENT
 - `npm run dev`: run frontend and backend together
 - `npm run build`: build backend and frontend
 - `npm run test`: run backend tests and frontend lint checks
+
+## Module 9 Advanced Features
+
+- Cognitive Service (Auto Image Tagging): backend analyzes upload images and auto-suggests tags. Clarifai API is supported, with an automatic Sharp-based color palette fallback.
+- Advanced Identity Framework: centralized auth/session logic with refresh-token rotation, active sessions listing, and single-session revocation.
+- Real-time Interaction Updates: photo detail and comments refresh every 30s to keep likes/comments/rating data live.
+- CI/CD Pipeline: GitHub Actions runs frontend lint, backend tests with coverage, and both production builds.
+
+## Azure Deployment
+
+Full Azure deployment steps are documented in [docs/AZURE_DEPLOYMENT.md](docs/AZURE_DEPLOYMENT.md).
+
+## Presentation Slides
+
+Complete PowerPoint slide content is available in [docs/PRESENTATION_SLIDES_MODULE9.md](docs/PRESENTATION_SLIDES_MODULE9.md).
 

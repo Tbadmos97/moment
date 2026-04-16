@@ -96,6 +96,7 @@ api.interceptors.response.use(
 
         const response = await refreshClient.post('/auth/refresh', { refreshToken });
         const newAccessToken = response.data?.data?.accessToken as string | undefined;
+        const newRefreshToken = (response.data?.data?.refreshToken as string | undefined) ?? refreshToken;
 
         if (!newAccessToken) {
           throw new Error('Unable to refresh session. Please log in again.');
@@ -103,7 +104,7 @@ api.interceptors.response.use(
 
         setTokens({
           accessToken: newAccessToken,
-          refreshToken,
+          refreshToken: newRefreshToken,
         });
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

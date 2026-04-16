@@ -68,7 +68,18 @@ export default function AdminPhotosPage(): JSX.Element {
       <div className="mt-5 space-y-3">
         {(photosQuery.data?.photos ?? []).map((photo) => (
           <article key={photo._id} className="grid gap-3 rounded-2xl border border-border bg-bg-card/60 p-3 sm:grid-cols-[88px_1fr_auto] sm:items-center">
-            <Image src={photo.thumbnailUrl} alt={photo.title} width={80} height={80} className="h-20 w-20 rounded-lg object-cover" />
+            {photo.mediaType === 'video' ? (
+              <video
+                src={photo.imageUrl}
+                poster={photo.thumbnailUrl || undefined}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-20 w-20 rounded-lg object-cover"
+              />
+            ) : (
+              <Image src={photo.thumbnailUrl || photo.imageUrl} alt={photo.title} width={80} height={80} className="h-20 w-20 rounded-lg object-cover" />
+            )}
             <div>
               <p className="font-medium text-text-primary">{photo.title}</p>
               <p className="mt-1 text-xs text-text-secondary">by @{photo.creator.username}</p>

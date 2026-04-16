@@ -12,6 +12,48 @@ import type { UserRole } from '../types/auth.types';
 
 const USER_ROLES: UserRole[] = ['creator', 'consumer', 'admin'];
 
+const refreshSessionSchema = new Schema(
+  {
+    tokenId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    tokenHash: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    maskedToken: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 80,
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+      maxlength: 260,
+    },
+    ipAddress: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastUsedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 const userSchema = new Schema(
   {
     username: {
@@ -61,6 +103,14 @@ const userSchema = new Schema(
       validate: {
         validator: (tokens: string[]) => tokens.length <= 5,
         message: 'A maximum of 5 refresh tokens can be stored.',
+      },
+    },
+    refreshSessions: {
+      type: [refreshSessionSchema],
+      default: [],
+      validate: {
+        validator: (sessions: Array<{ tokenId: string }>) => sessions.length <= 5,
+        message: 'A maximum of 5 active sessions can be stored.',
       },
     },
   },

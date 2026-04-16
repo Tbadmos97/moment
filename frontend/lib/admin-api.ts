@@ -33,7 +33,10 @@ export type AdminPhoto = {
   _id: string;
   title: string;
   caption: string;
+  imageUrl: string;
   thumbnailUrl: string;
+  mimeType?: string;
+  mediaType?: 'image' | 'video';
   creator: {
     _id: string;
     username: string;

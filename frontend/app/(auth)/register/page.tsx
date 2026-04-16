@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
@@ -66,13 +66,10 @@ const calculatePasswordStrength = (password: string): StrengthLevel => {
 export default function RegisterPage(): JSX.Element {
   const router = useRouter();
   const registerUser = useAuthStore((state) => state.register);
-  const user = useAuthStore((state) => state.user);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
-  const hasRedirectedRef = useRef(false);
 
   const {
     register,
@@ -137,21 +134,11 @@ export default function RegisterPage(): JSX.Element {
       });
       const role = useAuthStore.getState().user?.role;
       toast.success(`Account created (${role === 'admin' ? 'admin' : role === 'creator' ? 'creator' : 'consumer'})`);
-      hasRedirectedRef.current = true;
       router.replace(role === 'admin' ? '/admin' : role === 'creator' ? '/creator' : '/discover');
     } catch {
       toast.error('Registration failed. Please try again.');
     }
   };
-
-  useEffect(() => {
-    if (hasRedirectedRef.current || isLoading || !isAuthenticated || !user) {
-      return;
-    }
-
-    hasRedirectedRef.current = true;
-    router.replace(user.role === 'admin' ? '/admin' : user.role === 'creator' ? '/creator' : '/discover');
-  }, [isAuthenticated, isLoading, router, user]);
 
   return (
     <motion.div layoutId="auth-content">

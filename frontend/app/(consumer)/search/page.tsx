@@ -173,7 +173,7 @@ export default function SearchPage(): JSX.Element {
       {showEmpty ? (
         <div className="mt-12 rounded-3xl border border-border/80 bg-black/20 px-8 py-12 text-center">
           <div className="mx-auto w-[140px]" dangerouslySetInnerHTML={{ __html: emptyIllustration }} />
-          <h2 className="mt-4 font-display text-3xl text-text-primary">No results found</h2>
+          <h2 className="mt-4 font-display text-3xl text-text-primary">No moments found for &apos;{submittedTerm}&apos;</h2>
           <p className="mt-2 text-sm text-text-secondary">Try another phrase, a broader word, or explore trending tags from the feed.</p>
         </div>
       ) : null}

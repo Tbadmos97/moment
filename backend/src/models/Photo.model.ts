@@ -98,6 +98,12 @@ const photoSchema = new Schema(
       required: true,
       trim: true,
     },
+    mediaType: {
+      type: String,
+      enum: ['image', 'video'],
+      default: 'image',
+      required: true,
+    },
     creator: {
       type: Schema.Types.ObjectId,
       ref: 'User',

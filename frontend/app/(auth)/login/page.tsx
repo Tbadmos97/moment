@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
@@ -15,7 +15,7 @@ import { useAuthStore } from '@/store/authStore';
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
-  rememberMe: z.boolean().default(false),
+  rememberMe: z.boolean(),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -23,13 +23,10 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginPage(): JSX.Element {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
-  const user = useAuthStore((state) => state.user);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
   const [showPassword, setShowPassword] = useState(false);
   const [shakeForm, setShakeForm] = useState(false);
-  const hasRedirectedRef = useRef(false);
 
   const {
     register,
@@ -49,7 +46,6 @@ export default function LoginPage(): JSX.Element {
       await login({ email: values.email, password: values.password });
       const role = useAuthStore.getState().user?.role;
       toast.success(`Welcome back (${role === 'admin' ? 'admin' : role === 'creator' ? 'creator' : 'consumer'})`);
-      hasRedirectedRef.current = true;
       router.replace(role === 'admin' ? '/admin' : role === 'creator' ? '/creator' : '/discover');
     } catch {
       setShakeForm(true);
@@ -57,15 +53,6 @@ export default function LoginPage(): JSX.Element {
       toast.error('Wrong credentials. Please try again.');
     }
   };
-
-  useEffect(() => {
-    if (hasRedirectedRef.current || isLoading || !isAuthenticated || !user) {
-      return;
-    }
-
-    hasRedirectedRef.current = true;
-    router.replace(user.role === 'admin' ? '/admin' : user.role === 'creator' ? '/creator' : '/discover');
-  }, [isAuthenticated, isLoading, router, user]);
 
   return (
     <motion.div

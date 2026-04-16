@@ -320,7 +320,7 @@ export const getAdminPhotos = asyncHandler(async (req: Request<unknown, unknown,
 
   const [photos, total] = await Promise.all([
     Photo.find(filter)
-      .select('_id title caption thumbnailUrl creator likesCount commentsCount isPublished createdAt')
+      .select('_id title caption imageUrl thumbnailUrl mimeType mediaType creator likesCount commentsCount isPublished createdAt')
       .populate('creator', 'username email role')
       .sort({ createdAt: -1 })
       .skip(skip)

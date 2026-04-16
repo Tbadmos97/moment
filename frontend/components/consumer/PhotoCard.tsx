@@ -30,10 +30,12 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isLiking, setIsLiking] = useState(false);
+  const [showBurst, setShowBurst] = useState(false);
   const [liked, setLiked] = useState(Boolean(photo.isLiked));
   const [likesCount, setLikesCount] = useState(photo.likesCount);
 
   const displayImage = photo.imageUrl || photo.thumbnailUrl;
+  const isVideo = photo.mediaType === 'video';
 
   const aspectPadding = useMemo(() => {
     const width = photo.width ?? 1;
@@ -56,6 +58,10 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
 
     try {
       await onToggleLike(photo._id, nextLiked);
+      if (nextLiked) {
+        setShowBurst(true);
+        window.setTimeout(() => setShowBurst(false), 700);
+      }
     } catch {
       setLiked((value) => !value);
       setLikesCount((count) => Math.max(0, count + (nextLiked ? -1 : 1)));
@@ -80,14 +86,31 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
       }}
     >
       <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
-        <Image
-          src={displayImage}
-          alt={photo.title}
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          priority={index < 4}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        {isVideo ? (
+          <video
+            src={photo.imageUrl}
+            poster={photo.thumbnailUrl || undefined}
+            muted
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <Image
+            src={displayImage}
+            alt={photo.title}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            priority={index < 4}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+
+        {isVideo ? (
+          <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/30 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-white">
+            Video
+          </div>
+        ) : null}
 
         <motion.div
           className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition duration-300 group-hover:opacity-100"
@@ -124,10 +147,25 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
               <button
                 type="button"
                 onClick={onLikeClick}
-                className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 text-sm text-white"
+                className="relative flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 text-sm text-white transition hover:-translate-y-[1px] hover:shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
               >
-                <Heart size={16} className={`transition ${liked ? 'scale-110 fill-red-500 text-red-500' : 'text-white'}`} />
+                <Heart size={16} className={`transition ${liked ? 'animate-likeBounce fill-red-500 text-red-500' : 'text-white'}`} />
                 {likesCount}
+
+                {showBurst ? (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    {Array.from({ length: 6 }).map((_, piece) => (
+                      <span
+                        key={piece}
+                        className="absolute h-1.5 w-1.5 rounded-full bg-red-400/80 animate-likeParticle"
+                        style={{
+                          transform: `rotate(${piece * 60}deg) translateY(-12px)`,
+                          animationDelay: `${piece * 0.03}s`,
+                        }}
+                      />
+                    ))}
+                  </span>
+                ) : null}
               </button>
             </div>
           </div>

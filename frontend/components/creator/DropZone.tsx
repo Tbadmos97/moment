@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { Camera } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 
@@ -8,7 +7,7 @@ import ImagePreview from './ImagePreview';
 
 interface DropZoneProps {
   previewUrl: string | null;
-  metadata: { width: number; height: number; fileSize: number } | null;
+  metadata: { width: number; height: number; fileSize: number; mediaKind: 'image' | 'video' } | null;
   onFileSelect: (file: File) => void;
   onError: (message: string | null) => void;
   isUploading: boolean;
@@ -26,9 +25,12 @@ export default function DropZone({
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png': ['.png'],
       'image/webp': ['.webp'],
+      'video/mp4': ['.mp4'],
+      'video/webm': ['.webm'],
+      'video/quicktime': ['.mov'],
     },
     maxFiles: 1,
-    maxSize: 10 * 1024 * 1024,
+    maxSize: 50 * 1024 * 1024,
     noClick: Boolean(previewUrl),
     noKeyboard: true,
     disabled: isUploading,
@@ -44,12 +46,12 @@ export default function DropZone({
       const firstErrorCode = first?.errors?.[0]?.code;
 
       if (firstErrorCode === 'file-too-large') {
-        onError('File too large. Maximum size is 10MB.');
+        onError('File too large. Maximum size is 50MB.');
         return;
       }
 
       if (firstErrorCode === 'file-invalid-type') {
-        onError('Unsupported format. Please use JPG, PNG, or WEBP.');
+        onError('Unsupported format. Please use JPG, PNG, WEBP, MP4, WEBM, or MOV.');
         return;
       }
 
@@ -58,10 +60,8 @@ export default function DropZone({
   });
 
   return (
-    <motion.div
+    <div
       {...getRootProps()}
-      animate={{ scale: isDragActive ? 1.02 : 1 }}
-      transition={{ type: 'spring', stiffness: 220, damping: 22 }}
       className={`upload-dash-border relative flex h-full min-h-[420px] cursor-pointer items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed bg-bg-card p-8 text-center transition ${
         isDragActive ? 'border-accent-gold bg-accent-gold/5 shadow-[0_0_40px_rgba(201,168,76,0.18)]' : 'border-border'
       } ${isUploading ? 'cursor-not-allowed opacity-70' : ''}`}
@@ -74,15 +74,16 @@ export default function DropZone({
           width={metadata.width}
           height={metadata.height}
           fileSize={metadata.fileSize}
+          mediaKind={metadata.mediaKind}
           onChangePhoto={open}
         />
       ) : (
         <div className="space-y-4">
           <Camera className="mx-auto h-11 w-11 animate-pulse text-accent-gold" />
           <h2 className="text-3xl font-display text-text-primary">Drop your moment here</h2>
-          <p className="text-sm text-text-secondary">Click to browse or drag and drop JPG, PNG, or WEBP up to 10MB</p>
+          <p className="text-sm text-text-secondary">Click to browse or drag and drop JPG, PNG, WEBP, MP4, WEBM, or MOV up to 50MB</p>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

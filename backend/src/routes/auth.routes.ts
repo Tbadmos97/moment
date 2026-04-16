@@ -3,11 +3,13 @@ import { Router } from 'express';
 import {
   becomeCreator,
   adminCreateCreator,
+  getSessions,
   getMe,
   login,
   logout,
   refreshToken,
   register,
+  revokeSession,
   setupInitialAdmin,
 } from '../controllers/auth.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -30,6 +32,8 @@ router.post('/login', authLimiter, loginUserValidation, validateRequest, login);
 router.post('/refresh', refreshTokenValidation, validateRequest, refreshToken);
 router.post('/logout', authenticate, logoutValidation, validateRequest, logout);
 router.get('/me', authenticate, getMe);
+router.get('/sessions', authenticate, getSessions);
+router.delete('/sessions/:tokenId', authenticate, revokeSession);
 router.post('/become-creator', authenticate, becomeCreatorValidation, validateRequest, becomeCreator);
 
 router.post(

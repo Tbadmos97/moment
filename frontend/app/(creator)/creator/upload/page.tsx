@@ -16,25 +16,28 @@ import api from '@/lib/axios';
 
 const uploadSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(100, 'Title max length is 100'),
-  caption: z.string().max(500, 'Caption max length is 500').optional().default(''),
-  locationName: z.string().max(120, 'Location max length is 120').optional().default(''),
-  isPublished: z.boolean().default(true),
+  caption: z.string().max(500, 'Caption max length is 500'),
+  locationName: z.string().max(120, 'Location max length is 120'),
+  isPublished: z.boolean(),
 });
 
 type UploadFormValues = z.infer<typeof uploadSchema>;
 type UploadStage = 'idle' | 'processing' | 'uploading' | 'saving' | 'published';
+type AITag = { tag: string; confidence: number };
 
 export default function CreatorUploadPage(): JSX.Element {
   const router = useRouter();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<{ width: number; height: number; fileSize: number } | null>(null);
+  const [metadata, setMetadata] = useState<{ width: number; height: number; fileSize: number; mediaKind: 'image' | 'video' } | null>(null);
   const [people, setPeople] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [dropError, setDropError] = useState<string | null>(null);
   const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [aiSuggestedTags, setAiSuggestedTags] = useState<AITag[]>([]);
+  const [isAnalyzingTags, setIsAnalyzingTags] = useState(false);
 
   const {
     register,
@@ -63,18 +66,81 @@ export default function CreatorUploadPage(): JSX.Element {
     const objectUrl = URL.createObjectURL(selectedFile);
     setPreviewUrl(objectUrl);
 
-    const image = new Image();
-    image.onload = () => {
-      setMetadata({
-        width: image.width,
-        height: image.height,
-        fileSize: selectedFile.size,
-      });
-    };
-    image.src = objectUrl;
+    if (selectedFile.type.startsWith('video/')) {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        setMetadata({
+          width: Math.round(video.videoWidth || 1280),
+          height: Math.round(video.videoHeight || 720),
+          fileSize: selectedFile.size,
+          mediaKind: 'video',
+        });
+      };
+      video.src = objectUrl;
+    } else {
+      const image = new Image();
+      image.onload = () => {
+        setMetadata({
+          width: image.width,
+          height: image.height,
+          fileSize: selectedFile.size,
+          mediaKind: 'image',
+        });
+      };
+      image.src = objectUrl;
+    }
 
     return () => {
       URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedFile]);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setAiSuggestedTags([]);
+      return;
+    }
+
+    if (!selectedFile.type.startsWith('image/')) {
+      setAiSuggestedTags([]);
+      setIsAnalyzingTags(false);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+
+    let cancelled = false;
+    setIsAnalyzingTags(true);
+
+    void api
+      .post('/photos/analyze-tags', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const detected = (response.data?.data?.tags as AITag[] | undefined) ?? [];
+        setAiSuggestedTags(detected.slice(0, 8));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiSuggestedTags([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAnalyzingTags(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, [selectedFile]);
 
@@ -110,6 +176,10 @@ export default function CreatorUploadPage(): JSX.Element {
     formData.append('people', JSON.stringify(people));
     formData.append('tags', JSON.stringify(tags));
     formData.append('isPublished', String(values.isPublished));
+    if (metadata) {
+      formData.append('width', String(metadata.width));
+      formData.append('height', String(metadata.height));
+    }
 
     try {
       setUploadStage('uploading');
@@ -212,7 +282,7 @@ export default function CreatorUploadPage(): JSX.Element {
                 <input
                   id="locationName"
                   className="w-full rounded-2xl border border-border bg-bg-card py-3 pl-9 pr-4 text-sm outline-none transition focus:border-accent-gold"
-                  placeholder="Lahore, Pakistan"
+                  placeholder="London, UK"
                   {...register('locationName')}
                 />
               </div>
@@ -233,6 +303,34 @@ export default function CreatorUploadPage(): JSX.Element {
               onChange={setTags}
               lowerCase
             />
+
+            {isAnalyzingTags || aiSuggestedTags.length > 0 ? (
+              <div className="rounded-2xl border border-border bg-bg-card px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-accent-gold">AI-detected tags</p>
+                {isAnalyzingTags ? <p className="mt-2 text-xs text-text-secondary">Analyzing image...</p> : null}
+
+                {!isAnalyzingTags && aiSuggestedTags.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {aiSuggestedTags.map((item) => (
+                      <button
+                        key={`${item.tag}-${item.confidence}`}
+                        type="button"
+                        onClick={() => {
+                          setTags((current) => {
+                            const next = Array.from(new Set([...current, item.tag.toLowerCase()]));
+                            return next.slice(0, 10);
+                          });
+                        }}
+                        className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-[0.12em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+                        title={`Confidence ${(item.confidence * 100).toFixed(0)}%`}
+                      >
+                        {item.tag}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <label className="flex items-center justify-between rounded-2xl border border-border bg-bg-card px-4 py-3 text-sm">
               <span>

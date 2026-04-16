@@ -23,18 +23,21 @@ type TopViewedResponse = {
 };
 
 async function fetchPhoto(photoId: string): Promise<Photo | null> {
-  const response = await fetch(`${API_BASE_URL}/photos/${photoId}`, {
-    method: 'GET',
-    cache: 'force-cache',
-    next: { revalidate: 60 },
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/photos/${photoId}`, {
+      method: 'GET',
+      next: { revalidate: 60 },
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as PhotoResponse;
+    return payload.data?.photo ?? null;
+  } catch {
     return null;
   }
-
-  const payload = (await response.json()) as PhotoResponse;
-  return payload.data?.photo ?? null;
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
@@ -48,6 +51,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 
   const description = photo.caption || `Captured by @${photo.creator.username}`;
+  const socialImage = photo.mediaType === 'video' ? photo.thumbnailUrl : photo.imageUrl;
 
   return {
     title: `${photo.title} | MOMENT`,
@@ -57,7 +61,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       description,
       images: [
         {
-          url: photo.imageUrl,
+          url: socialImage,
           alt: photo.title,
         },
       ],
@@ -67,26 +71,29 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       card: 'summary_large_image',
       title: photo.title,
       description,
-      images: [photo.imageUrl],
+      images: [socialImage],
     },
   };
 }
 
 export async function generateStaticParams(): Promise<Array<{ id: string }>> {
-  const response = await fetch(`${API_BASE_URL}/photos/top-viewed?limit=50`, {
-    method: 'GET',
-    cache: 'force-cache',
-    next: { revalidate: 60 },
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/photos/top-viewed?limit=50`, {
+      method: 'GET',
+      next: { revalidate: 60 },
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as TopViewedResponse;
+    const photos = payload.data?.photos ?? [];
+
+    return photos.map((photo) => ({ id: photo._id }));
+  } catch {
     return [];
   }
-
-  const payload = (await response.json()) as TopViewedResponse;
-  const photos = payload.data?.photos ?? [];
-
-  return photos.map((photo) => ({ id: photo._id }));
 }
 
 export default async function PhotoDetailPage({ params }: { params: { id: string } }): Promise<JSX.Element> {

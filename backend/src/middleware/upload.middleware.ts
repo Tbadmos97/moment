@@ -1,6 +1,13 @@
 import multer, { type FileFilterCallback } from 'multer';
 
-const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
 
 const fileFilter = (_req: Express.Request, file: Express.Multer.File, callback: FileFilterCallback): void => {
   if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
@@ -8,13 +15,13 @@ const fileFilter = (_req: Express.Request, file: Express.Multer.File, callback: 
     return;
   }
 
-  callback(new Error('Only JPEG, PNG, and WEBP images are allowed'));
+  callback(new Error('Only JPG, PNG, WEBP, MP4, WEBM, and MOV files are allowed'));
 };
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 50 * 1024 * 1024,
   },
   fileFilter,
 });

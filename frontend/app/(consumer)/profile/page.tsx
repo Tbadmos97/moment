@@ -2,15 +2,18 @@
 
 import { AxiosError } from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Crown, LoaderCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Crown, LoaderCircle, MonitorX } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import toast from 'react-hot-toast';
 
+import { fetchActiveSessions, revokeActiveSession } from '@/lib/auth-api';
 import { useAuthStore } from '@/store/authStore';
 
 export default function ConsumerProfilePage(): JSX.Element {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const isLoading = useAuthStore((state) => state.isLoading);
   const becomeCreator = useAuthStore((state) => state.becomeCreator);
@@ -25,6 +28,22 @@ export default function ConsumerProfilePage(): JSX.Element {
     : 'border-accent-gold/50 bg-accent-gold/10 text-accent-gold';
 
   const roleBadgeLabel = isCreatorEnabled ? 'Creator Enabled' : 'Consumer Account';
+
+  const sessionsQuery = useQuery({
+    queryKey: ['active-sessions'],
+    queryFn: fetchActiveSessions,
+  });
+
+  const revokeSessionMutation = useMutation({
+    mutationFn: (tokenId: string) => revokeActiveSession(tokenId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['active-sessions'] });
+      toast.success('Session revoked');
+    },
+    onError: () => {
+      toast.error('Unable to revoke this session right now');
+    },
+  });
 
   const onRequestUpgrade = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -129,6 +148,42 @@ export default function ConsumerProfilePage(): JSX.Element {
             )}
           </button>
         </form>
+
+        <section className="mt-6 rounded-2xl border border-border bg-bg-secondary/70 p-5 sm:p-6">
+          <p className="text-xs uppercase tracking-[0.16em] text-accent-gold">Active Sessions</p>
+          <h2 className="mt-2 font-display text-2xl text-text-primary">Manage your signed-in devices</h2>
+
+          {sessionsQuery.isPending ? <p className="mt-3 text-sm text-text-secondary">Loading active sessions...</p> : null}
+
+          {!sessionsQuery.isPending && (sessionsQuery.data ?? []).length === 0 ? (
+            <p className="mt-3 text-sm text-text-secondary">No active sessions found.</p>
+          ) : null}
+
+          <div className="mt-4 space-y-3">
+            {(sessionsQuery.data ?? []).map((session) => (
+              <article key={session.tokenId} className="rounded-xl border border-border bg-bg-card/60 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">{session.maskedToken}</p>
+                    <p className="mt-1 text-xs text-text-muted">{session.userAgent ?? 'Unknown browser/device'}</p>
+                    <p className="mt-1 text-xs text-text-muted">IP: {session.ipAddress ?? 'N/A'}</p>
+                    <p className="mt-1 text-xs text-text-muted">Last used: {new Date(session.lastUsedAt).toLocaleString()}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => revokeSessionMutation.mutate(session.tokenId)}
+                    disabled={revokeSessionMutation.isPending}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-text-secondary transition hover:border-red-400 hover:text-red-400 disabled:opacity-60"
+                  >
+                    <MonitorX size={14} />
+                    Revoke
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
       </main>
 

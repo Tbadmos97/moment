@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { Camera } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -216,8 +217,11 @@ export default function ConsumerFeed(): JSX.Element {
 
       {empty ? (
         <div className="mt-12 rounded-3xl border border-border/80 bg-black/20 px-8 py-14 text-center">
-          <p className="font-display text-3xl text-text-primary">No moments here yet</p>
-          <p className="mt-3 text-sm text-text-secondary">Try changing the sort mode or pick a different tag to uncover hidden stories.</p>
+          <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full border border-border bg-bg-card text-accent-gold">
+            <Camera size={20} />
+          </div>
+          <p className="mt-4 font-display text-3xl text-text-primary">No moments yet. Be the first.</p>
+          <p className="mt-3 text-sm text-text-secondary">Start by uploading from a creator account and your story will appear here.</p>
         </div>
       ) : null}
 

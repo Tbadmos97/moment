@@ -32,6 +32,9 @@ export interface Photo {
   commentsCount: number;
   viewsCount?: number;
   tags?: string[];
+  isPublished?: boolean;
+  mediaType?: 'image' | 'video';
+  mimeType?: string;
   isLiked?: boolean;
   width?: number;
   height?: number;

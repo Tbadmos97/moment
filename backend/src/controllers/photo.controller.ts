@@ -5,6 +5,7 @@ import Comment from '../models/Comment.model';
 import Like from '../models/Like.model';
 import Photo from '../models/Photo.model';
 import cacheService from '../services/cache.service';
+import { analyzeImage } from '../services/imageAnalysis.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
 import { deleteFromR2, generateUniqueKey, uploadToR2 } from '../utils/r2.utils';
@@ -20,6 +21,8 @@ type UploadPhotoBody = {
   title?: string;
   caption?: string;
   locationName?: string;
+  width?: string | number;
+  height?: string | number;
   people?: string[] | string;
   tags?: string[] | string;
   isPublished?: string | boolean;
@@ -106,6 +109,24 @@ const parseStringArray = (input: string[] | string | undefined, toLower = false)
     .map((value) => value.trim())
     .filter(Boolean)
     .map((value) => (toLower ? value.toLowerCase() : value));
+};
+
+const dedupeTags = (values: string[]): string[] => {
+  return Array.from(new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean)));
+};
+
+const DEFAULT_VIDEO_THUMBNAIL =
+  process.env.VIDEO_FALLBACK_THUMBNAIL_URL?.trim() ||
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80';
+
+const parsePositiveNumber = (value: string | number | undefined, fallback: number): number => {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
 };
 
 const parsePaginationValue = (value: string | undefined, fallback: number): number => {
@@ -248,7 +269,7 @@ export const getPhotos = asyncHandler(async (req: Request<unknown, unknown, unkn
 
     const [photos, totalCount] = await Promise.all([
       Photo.find(baseFilter)
-        .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
+        .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height mimeType mediaType')
         .sort(sortQuery)
         .skip(skip)
         .limit(limit)
@@ -315,7 +336,7 @@ export const getPhotoById = asyncHandler(async (req: Request<PhotoIdParams>, res
   }
 
   const photo = await Photo.findOne({ _id: photoId, isPublished: true })
-    .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
+    .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height mimeType mediaType')
     .populate('creator', '-password -refreshTokens')
     .lean();
 
@@ -380,7 +401,7 @@ export const getPhotosByCreator = asyncHandler(async (req: Request<CreatorPhotos
 
   const [photos, total] = await Promise.all([
     Photo.find({ creator: req.params.userId, isPublished: true })
-      .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height')
+      .select('title caption location people tags imageUrl thumbnailUrl creator likes likesCount commentsCount viewsCount isPublished createdAt width height mimeType mediaType')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -586,7 +607,7 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
   }
 
   if (!req.file) {
-    throw createError('Image file is required', 400);
+    throw createError('Media file is required', 400);
   }
 
   const title = req.body.title?.trim();
@@ -595,19 +616,32 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
     throw createError('Title is required', 400);
   }
 
-  const processed = await processImage(req.file.buffer);
-  const mainKey = generateUniqueKey(`photos/${req.user.id}`, `${req.file.originalname}.webp`);
-  const thumbnailKey = generateUniqueKey(`photos/${req.user.id}/thumbnails`, `${req.file.originalname}.webp`);
+  const isVideo = req.file.mimetype.startsWith('video/');
+  const processed = !isVideo ? await processImage(req.file.buffer) : null;
+  const mainKey = isVideo
+    ? generateUniqueKey(`videos/${req.user.id}`, req.file.originalname)
+    : generateUniqueKey(`photos/${req.user.id}`, `${req.file.originalname}.webp`);
+  const thumbnailKey = isVideo
+    ? mainKey
+    : generateUniqueKey(`photos/${req.user.id}/thumbnails`, `${req.file.originalname}.webp`);
 
   let imageUrl: string | null = null;
   let thumbnailUrl: string | null = null;
 
   try {
-    imageUrl = await uploadToR2(processed.processedBuffer, mainKey, processed.mimeType, true);
-    thumbnailUrl = await uploadToR2(processed.thumbnailBuffer, thumbnailKey, processed.mimeType, true);
+    if (isVideo) {
+      imageUrl = await uploadToR2(req.file.buffer, mainKey, req.file.mimetype, true);
+      thumbnailUrl = DEFAULT_VIDEO_THUMBNAIL;
+    } else {
+      imageUrl = await uploadToR2(processed!.processedBuffer, mainKey, processed!.mimeType, true);
+      thumbnailUrl = await uploadToR2(processed!.thumbnailBuffer, thumbnailKey, processed!.mimeType, true);
+    }
 
     const people = parseStringArray(req.body.people, false).slice(0, 10);
-    const tags = parseStringArray(req.body.tags, true).slice(0, 10);
+    const creatorTags = parseStringArray(req.body.tags, true).slice(0, 10);
+    const aiTagPredictions = isVideo ? [] : await analyzeImage(req.file.buffer);
+    const aiTags = aiTagPredictions.map((item) => item.tag).slice(0, 8);
+    const tags = dedupeTags([...creatorTags, ...aiTags]).slice(0, 10);
     const caption = req.body.caption?.trim() ?? '';
     const locationName = resolveLocationName(req.body);
     const isPublished =
@@ -616,6 +650,8 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
         : req.body.isPublished === 'false'
           ? false
           : true;
+
+    const mediaType = isVideo ? 'video' : 'image';
 
     const photo = await Photo.create({
       title,
@@ -627,10 +663,11 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
       thumbnailUrl,
       imageKey: mainKey,
       thumbnailKey,
-      width: processed.width,
-      height: processed.height,
-      fileSize: processed.fileSize,
-      mimeType: processed.mimeType,
+      width: isVideo ? parsePositiveNumber(req.body.width, 1280) : processed!.width,
+      height: isVideo ? parsePositiveNumber(req.body.height, 720) : processed!.height,
+      fileSize: isVideo ? req.file.size : processed!.fileSize,
+      mimeType: isVideo ? req.file.mimetype : processed!.mimeType,
+      mediaType,
       creator: new Types.ObjectId(req.user.id),
       isPublished,
     });
@@ -646,9 +683,10 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
 
     return res.status(201).json({
       success: true,
-      message: 'Photo uploaded successfully',
+      message: isVideo ? 'Video uploaded successfully' : 'Photo uploaded successfully',
       data: {
         photo: populatedPhoto,
+        aiDetectedTags: aiTagPredictions,
       },
     });
   } catch (error) {
@@ -661,6 +699,33 @@ export const uploadPhoto = asyncHandler(async (req: Request<unknown, unknown, Up
 
     throw error;
   }
+});
+
+/**
+ * Analyzes a selected image and returns AI-suggested tags before upload.
+ */
+export const analyzePhotoTags = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw createError('Unauthorized', 401);
+  }
+
+  if (!req.file) {
+    throw createError('Image file is required', 400);
+  }
+
+  if (!req.file.mimetype.startsWith('image/')) {
+    throw createError('AI tag analysis supports image files only', 422);
+  }
+
+  const tags = await analyzeImage(req.file.buffer);
+
+  return res.status(200).json({
+    success: true,
+    message: 'AI tags analyzed successfully',
+    data: {
+      tags,
+    },
+  });
 });
 
 /**

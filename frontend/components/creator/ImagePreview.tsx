@@ -7,6 +7,7 @@ interface ImagePreviewProps {
   width: number;
   height: number;
   fileSize: number;
+  mediaKind: 'image' | 'video';
   onChangePhoto: () => void;
 }
 
@@ -23,6 +24,7 @@ export default function ImagePreview({
   width,
   height,
   fileSize,
+  mediaKind,
   onChangePhoto,
 }: ImagePreviewProps): JSX.Element {
   return (
@@ -32,7 +34,11 @@ export default function ImagePreview({
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       className="group relative h-full min-h-[360px] w-full overflow-hidden rounded-3xl"
     >
-      <Image src={previewUrl} alt="Selected upload preview" fill className="object-cover" unoptimized />
+      {mediaKind === 'video' ? (
+        <video src={previewUrl} className="h-full w-full object-cover" controls muted playsInline />
+      ) : (
+        <Image src={previewUrl} alt="Selected upload preview" fill className="object-cover" unoptimized />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent opacity-0 transition group-hover:opacity-100" />
       <button
         type="button"
@@ -40,7 +46,7 @@ export default function ImagePreview({
         className="absolute inset-x-0 top-1/2 mx-auto flex w-fit -translate-y-1/2 items-center gap-2 rounded-full border border-border bg-black/70 px-4 py-2 text-xs text-text-primary opacity-0 transition group-hover:opacity-100"
       >
         <RefreshCw size={14} />
-        Change photo
+        Change file
       </button>
       <div className="absolute bottom-4 right-4 rounded-full border border-border bg-black/65 px-3 py-1 text-xs text-text-primary">
         {width}x{height} • {formatFileSize(fileSize)}

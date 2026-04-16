@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { Toaster } from 'react-hot-toast';
 
 import AuthBootstrap from '@/components/auth/AuthBootstrap';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 type ProvidersProps = {
   children: ReactNode;
@@ -31,14 +32,29 @@ export default function Providers({ children }: ProvidersProps): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthBootstrap />
-      {children}
+      <ErrorBoundary>{children}</ErrorBoundary>
       <Toaster
-        position="top-right"
+        position="top-center"
         toastOptions={{
+          duration: 3200,
           style: {
             background: '#1A1A1A',
             color: '#FAFAFA',
             border: '1px solid #2A2A2A',
+            borderRadius: '14px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.42)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#C9A84C',
+              secondary: '#0A0A0A',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#0A0A0A',
+            },
           },
         }}
       />

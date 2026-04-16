@@ -8,6 +8,7 @@ import {
   getTopViewedPhotos,
   getTrendingTags,
   likePhoto,
+  analyzePhotoTags,
   unlikePhoto,
   updatePhoto,
   uploadPhoto,
@@ -27,6 +28,7 @@ const router = Router();
 router.get('/', optionalAuth, getPhotos);
 router.get('/trending-tags', getTrendingTags);
 router.get('/top-viewed', getTopViewedPhotos);
+router.post('/analyze-tags', authenticate, requireRole('creator'), uploadLimiter, uploadSingle, analyzePhotoTags);
 router.get('/creator/:userId', getPhotosByCreator);
 router.get('/:photoId/comments', optionalAuth, getComments);
 router.post('/:photoId/comments', authenticate, createComment);

@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "jest --runInBand --passWithNoTests",
+    "test:coverage": "jest --runInBand --passWithNoTests --coverage",
     "test:watch": "jest --watch"
   },
   "keywords": [

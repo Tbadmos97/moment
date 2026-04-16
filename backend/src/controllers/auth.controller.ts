@@ -2,11 +2,17 @@ import type { Request, Response } from 'express';
 
 import User from '../models/User.model';
 import cacheService from '../services/cache.service';
+import {
+  getSessionMetadata,
+  issueSessionTokens,
+  listActiveSessions,
+  revokeSessionById,
+  revokeSessionByToken,
+  rotateSessionTokens,
+} from '../services/identity.service';
 import type { AppError } from '../types/auth.types';
 import asyncHandler from '../utils/asyncHandler';
 import {
-  generateAccessToken,
-  generateRefreshToken,
   verifyRefreshToken,
 } from '../utils/jwt.utils';
 import {
@@ -50,18 +56,14 @@ interface SetupAdminBody {
   adminSetupSecret: string;
 }
 
+type SessionParams = {
+  tokenId: string;
+};
+
 const createError = (message: string, statusCode: number): AppError => {
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
   return error;
-};
-
-const normalizeTokens = (tokens: string[]): string[] => {
-  if (tokens.length <= 5) {
-    return tokens;
-  }
-
-  return tokens.slice(tokens.length - 5);
 };
 
 const toPublicUser = (user: {
@@ -77,16 +79,6 @@ const toPublicUser = (user: {
     email: user.email,
     role: user.role,
     avatar: user.avatar ?? undefined,
-  };
-};
-
-const issueTokens = (userId: string, role: 'creator' | 'consumer' | 'admin') => {
-  const accessToken = generateAccessToken(userId, role);
-  const refreshToken = generateRefreshToken(userId);
-
-  return {
-    accessToken,
-    refreshToken,
   };
 };
 
@@ -135,9 +127,7 @@ export const register = asyncHandler(async (req: Request<unknown, unknown, Regis
     bio,
   });
 
-  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
-
-  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  const { accessToken, refreshToken } = issueSessionTokens(user, getSessionMetadata(req));
   await user.save();
   await Promise.all([
     cacheService.invalidateUsernameCheck(),
@@ -172,9 +162,7 @@ export const login = asyncHandler(async (req: Request<unknown, unknown, LoginBod
     throw createError('Account is deactivated', 403);
   }
 
-  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
-
-  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  const { accessToken, refreshToken } = issueSessionTokens(user, getSessionMetadata(req));
   await user.save();
   await cacheService.invalidateUserProfile(String(user._id));
 
@@ -206,11 +194,7 @@ export const refreshToken = asyncHandler(async (req: Request<unknown, unknown, R
     throw createError('Refresh token is not recognized', 401);
   }
 
-  const { accessToken, refreshToken: newRefreshToken } = issueTokens(String(user._id), user.role);
-
-  user.refreshTokens = normalizeTokens(
-    user.refreshTokens.filter((token) => token !== oldRefreshToken).concat(newRefreshToken),
-  );
+  const { accessToken, refreshToken: newRefreshToken } = rotateSessionTokens(user, oldRefreshToken, getSessionMetadata(req));
   await user.save();
   await cacheService.invalidateUserProfile(String(user._id));
 
@@ -239,7 +223,7 @@ export const logout = asyncHandler(async (req: Request<unknown, unknown, LogoutB
     throw createError('User not found', 404);
   }
 
-  user.refreshTokens = user.refreshTokens.filter((token) => token !== tokenToRevoke);
+  revokeSessionByToken(user, tokenToRevoke);
   await user.save();
   await cacheService.invalidateUserProfile(String(user._id));
 
@@ -319,8 +303,7 @@ export const becomeCreator = asyncHandler(async (req: Request<unknown, unknown, 
   }
 
   if (user.role === 'creator' || user.role === 'admin') {
-    const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
-    user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+    const { accessToken, refreshToken } = issueSessionTokens(user, getSessionMetadata(req));
     await user.save();
     await cacheService.invalidateUserProfile(String(user._id));
 
@@ -337,8 +320,7 @@ export const becomeCreator = asyncHandler(async (req: Request<unknown, unknown, 
 
   user.role = 'creator';
 
-  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
-  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  const { accessToken, refreshToken } = issueSessionTokens(user, getSessionMetadata(req));
   await user.save();
   await Promise.all([
     cacheService.invalidateUserProfile(String(user._id)),
@@ -446,8 +428,7 @@ export const setupInitialAdmin = asyncHandler(async (req: Request<unknown, unkno
     role: 'admin',
   });
 
-  const { accessToken, refreshToken } = issueTokens(String(user._id), user.role);
-  user.refreshTokens = normalizeTokens([...user.refreshTokens, refreshToken]);
+  const { accessToken, refreshToken } = issueSessionTokens(user, getSessionMetadata(req));
   await user.save();
   await Promise.all([
     cacheService.invalidateUsernameCheck(),
@@ -463,5 +444,57 @@ export const setupInitialAdmin = asyncHandler(async (req: Request<unknown, unkno
       accessToken,
       refreshToken,
     },
+  });
+});
+
+/**
+ * Lists active refresh sessions for the authenticated user.
+ */
+export const getSessions = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw createError('Unauthorized', 401);
+  }
+
+  const user = await User.findById(req.user.id).select('_id refreshTokens refreshSessions');
+
+  if (!user) {
+    throw createError('User not found', 404);
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: 'Active sessions fetched successfully',
+    data: {
+      sessions: listActiveSessions(user),
+    },
+  });
+});
+
+/**
+ * Revokes one specific refresh session by tokenId.
+ */
+export const revokeSession = asyncHandler(async (req: Request<SessionParams>, res: Response) => {
+  if (!req.user) {
+    throw createError('Unauthorized', 401);
+  }
+
+  const user = await User.findById(req.user.id).select('_id refreshTokens refreshSessions');
+
+  if (!user) {
+    throw createError('User not found', 404);
+  }
+
+  const revoked = revokeSessionById(user, req.params.tokenId);
+
+  if (!revoked) {
+    throw createError('Session not found', 404);
+  }
+
+  await user.save();
+  await cacheService.invalidateUserProfile(String(user._id));
+
+  return res.status(200).json({
+    success: true,
+    message: 'Session revoked successfully',
   });
 });

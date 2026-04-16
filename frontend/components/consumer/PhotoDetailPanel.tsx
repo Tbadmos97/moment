@@ -2,7 +2,7 @@
 
 import { Heart, MapPin, Share2 } from 'lucide-react';
 import Image from 'next/image';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import type { Photo } from '@/types';
@@ -17,7 +17,24 @@ type PhotoDetailPanelProps = {
 };
 
 export default function PhotoDetailPanel({ photo, photoId, isLiking, onToggleLike }: PhotoDetailPanelProps): JSX.Element {
-  const people = photo.people?.filter(Boolean).slice(0, 6) ?? [];
+  const [expandedCaption, setExpandedCaption] = useState(false);
+
+  const allPeople = photo.people?.filter(Boolean) ?? [];
+  const visiblePeople = allPeople.slice(0, 3);
+  const hiddenPeopleCount = Math.max(0, allPeople.length - visiblePeople.length);
+
+  const captionTooLong = (photo.caption?.length ?? 0) > 200;
+  const displayCaption = useMemo(() => {
+    if (!photo.caption) {
+      return '';
+    }
+
+    if (expandedCaption || !captionTooLong) {
+      return photo.caption;
+    }
+
+    return `${photo.caption.slice(0, 200).trimEnd()}...`;
+  }, [captionTooLong, expandedCaption, photo.caption]);
 
   return (
     <aside className="relative flex max-h-[86vh] flex-col overflow-hidden rounded-3xl border border-border/70 bg-bg-secondary/80">
@@ -42,7 +59,20 @@ export default function PhotoDetailPanel({ photo, photoId, isLiking, onToggleLik
 
         <section>
           <h1 className="font-display text-4xl text-text-primary">{photo.title}</h1>
-          {photo.caption ? <p className="mt-3 text-sm leading-relaxed text-text-secondary">{photo.caption}</p> : null}
+          {photo.caption ? (
+            <div className="mt-3">
+              <p className="text-sm leading-relaxed text-text-secondary">{displayCaption}</p>
+              {captionTooLong ? (
+                <button
+                  type="button"
+                  onClick={() => setExpandedCaption((value) => !value)}
+                  className="mt-2 text-xs uppercase tracking-[0.14em] text-accent-gold"
+                >
+                  {expandedCaption ? 'Show less' : 'Show more'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {photo.location?.name ? (
             <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-black/20 px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-text-secondary">
               <MapPin size={13} />
@@ -51,11 +81,11 @@ export default function PhotoDetailPanel({ photo, photoId, isLiking, onToggleLik
           ) : null}
         </section>
 
-        {people.length > 0 ? (
+        {allPeople.length > 0 ? (
           <section>
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-text-muted">People</p>
             <div className="flex flex-wrap items-center gap-2">
-              {people.map((person, index) => (
+              {visiblePeople.map((person, index) => (
                 <span key={`${person}-${index}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-black/20 px-3 py-1.5 text-xs text-text-secondary">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-bg-card text-[10px] uppercase text-accent-gold">
                     {person.slice(0, 1)}
@@ -63,6 +93,12 @@ export default function PhotoDetailPanel({ photo, photoId, isLiking, onToggleLik
                   {person}
                 </span>
               ))}
+
+              {hiddenPeopleCount > 0 ? (
+                <span className="inline-flex items-center rounded-full border border-border bg-black/20 px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-text-muted">
+                  +{hiddenPeopleCount} more
+                </span>
+              ) : null}
             </div>
           </section>
         ) : null}
