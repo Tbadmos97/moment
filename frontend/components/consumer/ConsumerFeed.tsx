@@ -21,12 +21,44 @@ const masonryBreakpoints = {
   640: 2,
 };
 
+const getAdaptiveLimit = (): number => {
+  if (typeof navigator === 'undefined') {
+    return 20;
+  }
+
+  const connection = (navigator as Navigator & {
+    connection?: {
+      effectiveType?: string;
+      saveData?: boolean;
+    };
+  }).connection;
+
+  if (!connection) {
+    return 20;
+  }
+
+  if (connection.saveData || connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g') {
+    return 12;
+  }
+
+  if (connection.effectiveType === '3g') {
+    return 16;
+  }
+
+  return 24;
+};
+
 export default function ConsumerFeed(): JSX.Element {
   const queryClient = useQueryClient();
   const [sort, setSort] = useState<FeedSort>('latest');
   const [activeTag, setActiveTag] = useState<string | undefined>();
+  const [pageLimit, setPageLimit] = useState(20);
   const pendingFetchRef = useRef(false);
   const { ref: sentinelRef, inView } = useInView({ rootMargin: '320px' });
+
+  useEffect(() => {
+    setPageLimit(getAdaptiveLimit());
+  }, []);
 
   const trendingTagsQuery = useQuery({
     queryKey: ['trending-tags'],
@@ -34,11 +66,11 @@ export default function ConsumerFeed(): JSX.Element {
   });
 
   const photosQuery = useInfiniteQuery({
-    queryKey: ['consumer-feed', sort, activeTag],
+    queryKey: ['consumer-feed', sort, activeTag, pageLimit],
     queryFn: ({ pageParam }) =>
       fetchPhotos({
         pageParam: pageParam as number,
-        limit: 20,
+        limit: pageLimit,
         sort,
         tag: activeTag,
       }),

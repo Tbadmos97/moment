@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AxiosError } from 'axios';
-import { ImageUp, MapPin } from 'lucide-react';
+import { CheckCircle2, Circle, ImageUp, MapPin, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,17 @@ type UploadFormValues = z.infer<typeof uploadSchema>;
 type UploadStage = 'idle' | 'processing' | 'uploading' | 'saving' | 'published';
 type AITag = { tag: string; confidence: number };
 
+const CREATOR_UPLOAD_DRAFT_KEY = 'moment:creator-upload-draft:v1';
+
+type UploadDraft = {
+  title: string;
+  caption: string;
+  locationName: string;
+  isPublished: boolean;
+  people: string[];
+  tags: string[];
+};
+
 export default function CreatorUploadPage(): JSX.Element {
   const router = useRouter();
 
@@ -38,11 +49,13 @@ export default function CreatorUploadPage(): JSX.Element {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [aiSuggestedTags, setAiSuggestedTags] = useState<AITag[]>([]);
   const [isAnalyzingTags, setIsAnalyzingTags] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<UploadFormValues>({
     resolver: zodResolver(uploadSchema),
@@ -55,6 +68,66 @@ export default function CreatorUploadPage(): JSX.Element {
   });
 
   const caption = watch('caption') ?? '';
+  const title = watch('title') ?? '';
+  const locationName = watch('locationName') ?? '';
+  const isPublished = watch('isPublished');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const raw = window.localStorage.getItem(CREATOR_UPLOAD_DRAFT_KEY);
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<UploadDraft>;
+
+      reset({
+        title: parsed.title ?? '',
+        caption: parsed.caption ?? '',
+        locationName: parsed.locationName ?? '',
+        isPublished: typeof parsed.isPublished === 'boolean' ? parsed.isPublished : true,
+      });
+
+      setPeople(Array.isArray(parsed.people) ? parsed.people.slice(0, 10) : []);
+      setTags(Array.isArray(parsed.tags) ? parsed.tags.slice(0, 10) : []);
+      setDraftRestored(true);
+    } catch {
+      window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const hasContent = Boolean(title.trim() || caption.trim() || locationName.trim() || people.length > 0 || tags.length > 0);
+
+    if (!hasContent) {
+      window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const payload: UploadDraft = {
+        title,
+        caption,
+        locationName,
+        isPublished,
+        people,
+        tags,
+      };
+      window.localStorage.setItem(CREATOR_UPLOAD_DRAFT_KEY, JSON.stringify(payload));
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [caption, isPublished, locationName, people, tags, title]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -202,6 +275,9 @@ export default function CreatorUploadPage(): JSX.Element {
 
       setUploadStage('published');
       setUploadProgress(100);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
+      }
       toast.success('Moment published successfully');
 
       setTimeout(() => {
@@ -239,8 +315,44 @@ export default function CreatorUploadPage(): JSX.Element {
         </section>
 
         <section className="rounded-3xl border border-border bg-bg-secondary/70 p-6 md:p-7">
-          <p className="mb-1 text-xs uppercase tracking-[0.22em] text-accent-gold">Creator Upload</p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.22em] text-accent-gold">Creator Upload</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.localStorage.removeItem(CREATOR_UPLOAD_DRAFT_KEY);
+                }
+                reset({ title: '', caption: '', locationName: '', isPublished: true });
+                setPeople([]);
+                setTags([]);
+                setDraftRestored(false);
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-text-secondary transition hover:border-accent-gold hover:text-accent-gold"
+            >
+              <RotateCcw size={12} />
+              Clear draft
+            </button>
+          </div>
           <h1 className="text-3xl font-display">Craft Your Next Moment</h1>
+          {draftRestored ? <p className="mt-2 text-xs text-accent-gold">Draft restored from previous session.</p> : null}
+
+          <div className="mt-5 rounded-2xl border border-border bg-bg-card/70 px-4 py-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-text-muted">Publish readiness</p>
+            <div className="mt-2 grid gap-2 text-xs text-text-secondary sm:grid-cols-2">
+              {[
+                { label: 'Media selected', done: Boolean(selectedFile) },
+                { label: 'Title added', done: title.trim().length > 0 },
+                { label: 'Location set', done: locationName.trim().length > 0 },
+                { label: 'At least one tag', done: tags.length > 0 },
+              ].map((item) => (
+                <p key={item.label} className="inline-flex items-center gap-2">
+                  {item.done ? <CheckCircle2 size={14} className="text-success" /> : <Circle size={14} className="text-text-muted" />}
+                  {item.label}
+                </p>
+              ))}
+            </div>
+          </div>
 
           <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <div>

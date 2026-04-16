@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Heart } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchPhotoById } from '@/lib/consumer-api';
 import type { Photo } from '@/types';
@@ -29,11 +29,15 @@ export function PhotoCardSkeleton({ index }: { index: number }): JSX.Element {
 export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps): JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const articleRef = useRef<HTMLElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const prefetchedRef = useRef(false);
   const [isLiking, setIsLiking] = useState(false);
   const [showBurst, setShowBurst] = useState(false);
   const [liked, setLiked] = useState(Boolean(photo.isLiked));
   const [likesCount, setLikesCount] = useState(photo.likesCount);
   const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [isInViewport, setIsInViewport] = useState(false);
 
   const displayImage = photo.imageUrl || photo.thumbnailUrl;
   const isVideo = photo.mediaType === 'video';
@@ -47,7 +51,61 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
 
   useEffect(() => {
     setMediaLoaded(false);
+    prefetchedRef.current = false;
   }, [photo._id]);
+
+  useEffect(() => {
+    if (!articleRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const visible = entry.isIntersecting;
+          setIsInViewport(visible);
+
+          if (visible && !prefetchedRef.current) {
+            prefetchedRef.current = true;
+            void queryClient.prefetchQuery({
+              queryKey: ['photo-detail', photo._id],
+              queryFn: () => fetchPhotoById(photo._id),
+              staleTime: 45_000,
+            });
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: '260px',
+        threshold: 0.2,
+      },
+    );
+
+    observer.observe(articleRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [photo._id, queryClient]);
+
+  useEffect(() => {
+    if (!isVideo || !videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+
+    if (isInViewport) {
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => undefined);
+      }
+      return;
+    }
+
+    video.pause();
+  }, [isInViewport, isVideo]);
 
   const onLikeClick = async (event: React.MouseEvent<HTMLButtonElement>): Promise<void> => {
     event.stopPropagation();
@@ -89,6 +147,7 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
           staleTime: 30_000,
         });
       }}
+      ref={articleRef}
     >
       <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
         {!mediaLoaded ? (
@@ -99,6 +158,7 @@ export default function PhotoCard({ photo, index, onToggleLike }: PhotoCardProps
 
         {isVideo ? (
           <video
+            ref={videoRef}
             src={photo.imageUrl}
             poster={photo.thumbnailUrl || undefined}
             autoPlay
