@@ -23,7 +23,7 @@ export default function Header(): JSX.Element {
 
   const handleLogout = async (): Promise<void> => {
     await logout();
-    router.replace('/register');
+    router.replace('/');
   };
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function Header(): JSX.Element {
 
   const activeSearchValue = searchParams.get('q') ?? '';
 
-  const blurStyle = scrolled || pathname !== '/' ? 'bg-black/45 backdrop-blur-xl border-border/80 shadow-[0_10px_34px_rgba(0,0,0,0.35)]' : 'bg-transparent border-transparent';
+  const blurStyle = scrolled || pathname !== '/' ? 'bg-black/72 backdrop-blur-sm border-border/90 shadow-[0_10px_30px_rgba(0,0,0,0.45)]' : 'bg-black/52 backdrop-blur-sm border-border/70';
 
   return (
     <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${blurStyle}`}>
@@ -67,7 +67,7 @@ export default function Header(): JSX.Element {
         <motion.form
           layoutId="header-search"
           onSubmit={onSubmit}
-          className="relative hidden flex-1 items-center rounded-full border border-border/80 bg-black/45 px-4 py-2 md:flex"
+          className="relative hidden flex-1 items-center rounded-full border border-border/90 bg-black/60 px-4 py-2 md:flex"
           whileFocus={{ scale: 1.01 }}
         >
           <Search size={17} className="text-text-secondary" />
@@ -94,18 +94,19 @@ export default function Header(): JSX.Element {
         </motion.form>
 
         <div className="ml-auto hidden items-center gap-2 md:flex">
-          <button className="ui-btn-ghost rounded-full p-2" type="button" aria-label="Notifications">
+          <button className="ui-btn-ghost rounded-full p-2 text-text-primary" type="button" aria-label="Notifications">
             <Bell size={18} />
           </button>
-          <Link href={profileHref} className="ui-btn-ghost rounded-full p-2" aria-label="Profile">
-            <User size={18} />
+          <Link href={profileHref} className="ui-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-[0.14em]" aria-label="Profile">
+            <User size={14} />
+            Profile
           </Link>
           <button
             type="button"
             onClick={() => {
               void handleLogout();
             }}
-            className="ui-btn-secondary px-4 py-2 text-xs uppercase tracking-[0.14em]"
+            className="ui-btn-primary px-4 py-2 text-xs uppercase tracking-[0.14em]"
           >
             Logout
           </button>
@@ -137,7 +138,7 @@ export default function Header(): JSX.Element {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.35 }}
-              className="fixed right-0 top-0 z-50 flex h-full w-[88%] max-w-sm flex-col gap-6 border-l border-border bg-bg-secondary/95 p-6 backdrop-blur"
+              className="fixed right-0 top-0 z-50 flex h-full w-[88%] max-w-sm flex-col gap-6 border-l border-border bg-bg-secondary/98 p-6 backdrop-blur-sm"
             >
               <div className="flex items-center justify-between">
                 <p className="brand-wordmark text-2xl">MOMENT</p>

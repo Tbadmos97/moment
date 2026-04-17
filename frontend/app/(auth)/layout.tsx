@@ -42,13 +42,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }):
       </section>
 
       <section className="flex items-center justify-center px-6 py-10 sm:px-10">
-        <div className={`w-full ${pathname.includes('/register') ? 'max-w-xl' : 'max-w-lg'}`}>
+        <div className={`w-full ${pathname.includes('/register') ? 'max-w-2xl' : 'max-w-xl'}`}>
           <Link href="/" className="brand-wordmark mb-8 inline-flex text-3xl md:hidden">
             MOMENT
           </Link>
           <motion.div
             layoutId="auth-card"
-            className="glass-panel p-8 sm:p-9"
+            className="clarity-panel p-9 sm:p-10"
           >
             {children}
           </motion.div>

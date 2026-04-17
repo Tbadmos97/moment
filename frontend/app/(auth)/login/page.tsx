@@ -60,9 +60,9 @@ export default function LoginPage(): JSX.Element {
       animate={shakeForm ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
       transition={{ duration: 0.36 }}
     >
-      <p className="text-2xl font-display text-text-primary">Sign In</p>
-      <p className="mt-2 text-sm text-text-secondary">Step into your visual world.</p>
-      <p className="mt-2 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-text-secondary">
+      <p className="text-3xl font-display text-text-primary">Sign In</p>
+      <p className="mt-2 text-base text-text-secondary">Step into your visual world.</p>
+      <p className="mt-3 rounded-xl border border-border bg-black/35 px-3 py-2 text-xs text-text-secondary">
         Role is detected automatically from your account: creators go to Creator Dashboard, consumers go to Discover.
       </p>
 
@@ -74,7 +74,7 @@ export default function LoginPage(): JSX.Element {
           <input
             id="email"
             type="email"
-            className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+            className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
             placeholder="you@example.com"
             {...register('email')}
           />
@@ -89,13 +89,13 @@ export default function LoginPage(): JSX.Element {
             <input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 pr-12 text-sm outline-none transition focus:border-accent-gold"
+              className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 pr-12 text-base outline-none transition focus:border-accent-gold"
               placeholder="Enter your password"
               {...register('password')}
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary"
               onClick={() => setShowPassword((value) => !value)}
               aria-label="Toggle password visibility"
             >
@@ -127,7 +127,7 @@ export default function LoginPage(): JSX.Element {
         </motion.button>
       </form>
 
-      <p className="mt-5 text-sm text-text-secondary">
+      <p className="mt-6 text-sm text-text-secondary">
         New here?{' '}
         <Link href="/register" className="text-accent-gold hover:text-accent-gold-light">
           Create an account

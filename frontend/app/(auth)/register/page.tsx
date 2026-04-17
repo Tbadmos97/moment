@@ -142,9 +142,9 @@ export default function RegisterPage(): JSX.Element {
 
   return (
     <motion.div layoutId="auth-content">
-      <p className="text-2xl font-display text-text-primary">Create Account</p>
-      <p className="mt-2 text-sm text-text-secondary">Join MOMENT and start sharing stories.</p>
-      <p className="mt-2 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-text-secondary">
+      <p className="text-3xl font-display text-text-primary">Create Account</p>
+      <p className="mt-2 text-base text-text-secondary">Join MOMENT and start sharing stories.</p>
+      <p className="mt-3 rounded-xl border border-border bg-black/35 px-3 py-2 text-xs text-text-secondary">
         Choose account type below. Creator registration requires a secure creator access code.
       </p>
 
@@ -154,13 +154,13 @@ export default function RegisterPage(): JSX.Element {
           <div className="grid grid-cols-2 gap-2">
             <label className="cursor-pointer">
               <input type="radio" value="consumer" className="peer sr-only" {...register('accountType')} />
-              <span className="flex items-center justify-center rounded-xl border border-border bg-bg-card px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
+              <span className="flex items-center justify-center rounded-xl border border-border bg-black/45 px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
                 Consumer
               </span>
             </label>
             <label className="cursor-pointer">
               <input type="radio" value="creator" className="peer sr-only" {...register('accountType')} />
-              <span className="flex items-center justify-center rounded-xl border border-border bg-bg-card px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
+              <span className="flex items-center justify-center rounded-xl border border-border bg-black/45 px-4 py-3 text-sm text-text-secondary transition peer-checked:border-accent-gold peer-checked:text-accent-gold">
                 Creator
               </span>
             </label>
@@ -176,7 +176,7 @@ export default function RegisterPage(): JSX.Element {
             <input
               id="creatorAccessCode"
               type="password"
-              className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+              className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
               placeholder="Enter secure creator code"
               {...register('creatorAccessCode')}
             />
@@ -191,7 +191,7 @@ export default function RegisterPage(): JSX.Element {
           <input
             id="username"
             type="text"
-            className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+            className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
             placeholder="your_username"
             {...register('username')}
           />
@@ -216,7 +216,7 @@ export default function RegisterPage(): JSX.Element {
           <input
             id="email"
             type="email"
-            className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+            className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
             placeholder="you@example.com"
             {...register('email')}
           />
@@ -230,7 +230,7 @@ export default function RegisterPage(): JSX.Element {
           <input
             id="password"
             type="password"
-            className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+            className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
             placeholder="••••••••"
             {...register('password')}
           />
@@ -257,7 +257,7 @@ export default function RegisterPage(): JSX.Element {
           <input
             id="confirmPassword"
             type="password"
-            className="w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-sm outline-none transition focus:border-accent-gold"
+            className="w-full rounded-xl border border-border bg-black/45 px-4 py-3 text-base outline-none transition focus:border-accent-gold"
             placeholder="Repeat your password"
             {...register('confirmPassword')}
           />
@@ -265,7 +265,7 @@ export default function RegisterPage(): JSX.Element {
         </div>
 
         {watchedAccountType === 'creator' ? (
-          <p className="rounded-xl border border-border bg-bg-card px-4 py-3 text-xs text-text-secondary">
+          <p className="rounded-xl border border-border bg-black/35 px-4 py-3 text-xs text-text-secondary">
             Creator accounts need a valid creator access code configured by admin.
           </p>
         ) : null}
